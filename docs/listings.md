@@ -10,9 +10,9 @@ Where AgentRead is listed, how each listing was made, and what is still open. Al
 | [x402scan](https://www.x402scan.com) | ✅ Registered (2 paid + 4 public routes, 0 failed) | `node scripts/register-x402scan.mjs` (Sign-In-With-X signature only, no payment) |
 | CDP x402 Bazaar / [agentic.market](https://agentic.market) | ⏳ Eligible, not yet indexed | Validator passes all checks (`node scripts/validate-bazaar.mjs`, run in CI). Indexing happens automatically after the **first successful paid call** through the CDP facilitator. A listing is dropped after 30 days without a settled payment |
 | [awesome-x402](https://github.com/xpaysh/awesome-x402) | ⏳ PR open: [#1974](https://github.com/xpaysh/awesome-x402/pull/1974) | Fork + PR |
-| [awesome-remote-mcp-servers](https://github.com/punkpeye/awesome-remote-mcp-servers) | ⏳ Waiting for a Glama connector | Requires a [Glama connector](https://glama.ai/mcp/connectors) badge and that the PR author starred the repo. See the entry below |
-| [Glama connectors](https://glama.ai/mcp/connectors) | ⏳ Not yet imported | Expected to sync from the MCP Registry; otherwise list it manually (Glama account) |
-| [mcpservers.org](https://mcpservers.org/submit) (feeds wong2/awesome-mcp-servers) | 📝 Manual: web form | Free plan: name, category (Web Scraping), short description, link, registry name, "supports remote", contact email |
+| [awesome-remote-mcp-servers](https://github.com/punkpeye/awesome-remote-mcp-servers) | ⏳ Waiting for the Glama connector (repo already starred) | Requires a [Glama connector](https://glama.ai/mcp/connectors) badge. See the entry below |
+| [Glama connectors](https://glama.ai/mcp/connectors) | ⏳ Submitted manually (2026-10-23), pending Glama's review | Ownership claims: repo `glama.json` and `/.well-known/glama.json` |
+| [mcpservers.org](https://mcpservers.org/submit) (feeds wong2/awesome-mcp-servers) | ⏳ Submitted (free plan, 2026-10-23), review takes up to 2 weeks | Web form |
 | PulseMCP and other registry-fed directories | ⏳ Expected via the MCP Registry | No action unless it is missing after a few days |
 | mcp.so | ⛔ Skipped | Only a paid ($39) publish option is offered |
 
@@ -26,6 +26,8 @@ Where AgentRead is listed, how each listing was made, and what is still open. Al
 | `/` | Service index: operations, prices, limits |
 | `/icon.png`, `/favicon.png` | 128×128 PNG icon, also the x402 `resource.iconUrl` |
 | 402 `PAYMENT-REQUIRED` | x402 v2 requirements + `extensions.bazaar` (input/output schema and examples) |
+
+**Daily watcher:** `.github/workflows/listing-status.yml` (`scripts/listing-status.mjs`) checks the MCP Registry, Glama, CDP Bazaar indexing and the awesome-x402 PR. It opens an issue in this repo when something goes live. Run it on demand with `gh workflow run listing-status.yml`.
 
 Audits: `gh workflow run CI -f agentread_url=https://agentread.omar-cv.workers.dev` runs the smoke test, the CDP Bazaar validator and `npx @agentcash/discovery` (x402scan's auditor) from GitHub's network.
 
