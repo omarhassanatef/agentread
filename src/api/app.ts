@@ -25,6 +25,8 @@ type Vars = {
   svc: Services;
   input: ExtractInput;
   target: ValidatedUrl;
+  /** Empty-body request: a discovery probe that only wants the payment requirements. */
+  probe: boolean;
 };
 export type AppEnv = { Bindings: Bindings; Variables: Vars };
 
@@ -128,10 +130,18 @@ export function createApp(deps: AppDeps = {}) {
   const prevalidate: MiddlewareHandler<AppEnv> = async (c, next) => {
     try {
       const cfg = c.get("cfg");
-      const parsed = extractInputSchema(cfg.limits).safeParse(await readJson(c));
-      if (!parsed.success) throw new AppError("invalid_request", zodMessage(parsed.error.issues));
-      c.set("target", await prevalidateUrl(parsed.data.url, c.get("svc")));
-      c.set("input", parsed.data);
+      const body = (await c.req.raw.clone().text()).trim();
+      if (body === "" || body === "{}") {
+        // Discovery probe (e.g. the CDP Bazaar validator sends `{}`): there is nothing to
+        // validate, so answer with the payment requirements. If someone pays anyway, the
+        // handler rejects it with 400 and @x402/hono does not settle (not charged).
+        c.set("probe", true);
+      } else {
+        const parsed = extractInputSchema(cfg.limits).safeParse(await readJson(c));
+        if (!parsed.success) throw new AppError("invalid_request", zodMessage(parsed.error.issues));
+        c.set("target", await prevalidateUrl(parsed.data.url, c.get("svc")));
+        c.set("input", parsed.data);
+      }
       await checkRateLimit(c.env?.PAID_RATE_LIMITER, clientKey(c.req.raw));
       if (!cfg.payment) {
         // Operator-facing reason goes to logs only; clients get a generic 503.
@@ -183,6 +193,7 @@ export function createApp(deps: AppDeps = {}) {
   };
 
   const paidHandler = (op: PaidOperation) => async (c: Context<AppEnv>) => {
+    if (c.get("probe")) return sendError(c, new AppError("invalid_request", "url: url is required"));
     const input = c.get("input");
     const target = c.get("target");
     try {

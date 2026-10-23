@@ -60,7 +60,7 @@ describe("x402 on HTTP — unpaid requests", () => {
 
   it("validates input before requesting payment (400, not 402)", async () => {
     const h = harness(routes);
-    for (const body of [{}, { url: 42 }, { url: PAGE, maxCharacters: 10 }, { url: PAGE, extra: true }]) {
+    for (const body of [{ url: "" }, { url: 42 }, { url: PAGE, maxCharacters: 10 }, { url: PAGE, extra: true }]) {
       const res = await h.fetch("/v1/extract", postJson(body));
       expect(res.status).toBe(400);
       expect(res.headers.get("payment-required")).toBeNull();
@@ -71,6 +71,25 @@ describe("x402 on HTTP — unpaid requests", () => {
     expect(blocked.headers.get("payment-required")).toBeNull();
     const notJson = await h.fetch("/v1/extract", { method: "POST", headers: { "content-type": "application/json" }, body: "{nope" });
     expect(notJson.status).toBe(400);
+  });
+
+  it("treats an empty body as a discovery probe: 402 with requirements, never charged", async () => {
+    const h = harness(routes);
+    for (const body of ["", "{}"]) {
+      const res = await h.fetch("/v1/extract", { method: "POST", headers: { "content-type": "application/json" }, body });
+      expect(res.status).toBe(402);
+      expect(res.headers.get("payment-required")).toBeTruthy();
+    }
+    // Paying for a probe gets a 400 and is not settled.
+    const res = await wrapFetchWithPayment(h.appFetch, payingClient().client)("https://agentread.test/v1/extract", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(400);
+    expect(h.facilitator.calls.verify).toBe(1);
+    expect(h.facilitator.chain.settlements).toHaveLength(0);
+    expect(h.upstream.calls).toHaveLength(0);
   });
 
   it("rejects hosts that fail the DNS guard before requesting payment", async () => {

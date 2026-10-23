@@ -8,6 +8,51 @@ export const DISCOVERY_TAGS = ["web", "extraction", "markdown", "scraping", "llm
 
 const EXAMPLE_INPUT = { url: "https://example.com/", maxCharacters: 20000, includeLinks: true };
 
+/** Real AgentRead output for https://example.com/ (Oct 2026), used as the Bazaar output example. */
+const EXAMPLE_EXTRACTION = {
+  method: "lite",
+  statusCode: 200,
+  contentType: "text/html",
+  charset: "utf-8",
+  redirects: 0,
+  bytesFetched: 577,
+  characters: 156,
+  totalCharacters: 156,
+  words: 25,
+  warnings: [],
+  durationMs: 140,
+};
+const EXAMPLE_MARKDOWN =
+  "This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.";
+export const EXAMPLE_OUTPUT: Record<PaidOperation, unknown> = {
+  extract_url: {
+    schemaVersion: "1.0",
+    operation: "extract_url",
+    requestedUrl: "https://example.com/",
+    finalUrl: "https://example.com/",
+    title: "Example Domain",
+    description: null,
+    markdown: EXAMPLE_MARKDOWN,
+    headings: [],
+    truncated: false,
+    extraction: EXAMPLE_EXTRACTION,
+  },
+  extract_url_structured: {
+    schemaVersion: "1.0",
+    operation: "extract_url_structured",
+    requestedUrl: "https://example.com/",
+    finalUrl: "https://example.com/",
+    metadata: { title: "Example Domain", description: null, canonicalUrl: null, language: "en", siteName: null, byline: null, publishedTime: null },
+    markdown: EXAMPLE_MARKDOWN,
+    headings: [],
+    headingsTruncated: false,
+    links: [],
+    linksTruncated: false,
+    truncated: false,
+    extraction: EXAMPLE_EXTRACTION,
+  },
+};
+
 function jsonSchema(schema: Parameters<typeof zodToJsonSchema>[0]): Record<string, unknown> {
   const { $schema: _ignored, ...rest } = zodToJsonSchema(schema, { $refStrategy: "none" }) as Record<string, unknown>;
   return rest;
@@ -24,7 +69,7 @@ export function httpDiscovery(op: PaidOperation, limits: Limits): Record<string,
     bodyType: "json",
     input: EXAMPLE_INPUT,
     inputSchema: jsonSchema(extractInputSchema(limits)),
-    output: { schema: outputSchemaFor(op) },
+    output: { example: EXAMPLE_OUTPUT[op], schema: outputSchemaFor(op) },
   });
 }
 

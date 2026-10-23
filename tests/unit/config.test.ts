@@ -117,3 +117,12 @@ describe("error normalisation", () => {
     expect(JSON.stringify(errorBody(e))).not.toMatch(/10\.0\.0\.3|secret/);
   });
 });
+
+describe("Bazaar discovery examples", () => {
+  it("output examples validate against the published result schemas", async () => {
+    const { EXAMPLE_OUTPUT } = await import("../../src/payments/discovery.js");
+    const { extractResultSchema, structuredResultSchema } = await import("../../src/schemas/index.js");
+    expect(() => extractResultSchema.parse(EXAMPLE_OUTPUT.extract_url)).not.toThrow();
+    expect(() => structuredResultSchema.parse(EXAMPLE_OUTPUT.extract_url_structured)).not.toThrow();
+  });
+});
