@@ -61,7 +61,7 @@ EVM_PRIVATE_KEY=0x<testnet-only key> npm run smoke:mcp  # also pays for extract_
 ## Against the deployed testnet Worker
 
 ✅ Deployed: `https://agentread-testnet.omar-cv.workers.dev` (receiver `0xDE20133E787A3cc64565b7AF1cF2bE3bEA3298Ea`; a payer wallet (unfunded) key is in `.secrets/testnet-wallets.json`, see the README).
-⚠️ Not reachable from the development machine's network (`workers.dev` IP range blocked). Use the CI smoke job or another network.
+✅ `smoke:local` 9/9 against the deployment from GitHub Actions: `gh workflow run CI -f agentread_url=https://agentread-testnet.omar-cv.workers.dev`. It is not reachable from the development machine's network, where the `workers.dev` range is blocked.
 
 ## Deploying your own testnet Worker
 

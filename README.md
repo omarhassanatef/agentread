@@ -15,7 +15,8 @@ Prices are configuration, not code (see [Configuration](#configuration)).
 > **Status: MVP.** What has been verified:
 > - **Automated tests:** all pass (218 tests, run inside the Workers runtime).
 > - **Local smoke test (9/9):** run against `wrangler dev` using the **live x402.org facilitator**. A genuinely signed payment from an unfunded wallet passes signature and requirement checks and is rejected for `insufficient_balance`, so the live wire path is proven up to the transfer itself.
-> - **Testnet deployment:** live at `https://agentread-testnet.omar-cv.workers.dev`. It could not be reached from the development network, which blocks the `workers.dev` IP range, so check it from another network or with the CI smoke job.
+> - **Testnet deployment:** live at `https://agentread-testnet.omar-cv.workers.dev` and **passes the same 9/9 smoke checks from GitHub Actions** (CI `workflow_dispatch` job). The development network blocks the `workers.dev` IP range, hence the CI vantage point.
+> - **Not yet exercised on the deployed edge:** a paid extraction, including its CPU usage against the plan's limit.
 >
 > **A funded live payment has not yet been made** (see [Testnet payment demo](#testnet-payment-demo)). Read [Limitations](#limitations) before relying on it.
 
