@@ -7,6 +7,9 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
+      // The AI binding would otherwise open a remote proxy session to Cloudflare (needs
+      // credentials, slows every run). Tests inject a fake Markdown converter instead.
+      remoteBindings: false,
       miniflare: {
         bindings: { ENVIRONMENT: "test", DNS_CHECK: "off" },
       },
