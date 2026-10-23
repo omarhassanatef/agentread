@@ -6,7 +6,12 @@ import { decodePaymentRequiredHeader } from "@x402/core/http";
 import { SERVICE_VERSION, SUPPORTED_NETWORKS, type AppConfig, type Bindings } from "../config/env.js";
 import { extractUrl, extractUrlStructured, inspectUrl, prevalidateUrl, type Services } from "../extraction/operations.js";
 import { handleMcpRequest } from "../mcp/server.js";
-import { createResourceServer, paidRoutes, type PaidOperation } from "../payments/x402.js";
+import { PAID_OPERATIONS, createResourceServer, paidRoutes, type PaidOperation } from "../payments/x402.js";
+import { attachHttpDiscovery } from "../payments/discovery.js";
+
+const PAID_ROUTE_KEYS = Object.fromEntries(
+  (Object.keys(PAID_OPERATIONS) as PaidOperation[]).map((op) => [`${PAID_OPERATIONS[op].method} ${PAID_OPERATIONS[op].path}`, op]),
+) as Record<string, PaidOperation>;
 import { extractInputSchema, inspectInputSchema, type ExtractInput, type InspectInput } from "../schemas/index.js";
 import type { ValidatedUrl } from "../security/url.js";
 import { AppError, errorBody, toAppError } from "../utils/errors.js";
@@ -147,7 +152,10 @@ export function createApp(deps: AppDeps = {}) {
     const cfg = c.get("cfg");
     const facilitator = getFacilitator(cfg, deps);
     const server = createResourceServer(cfg.payment!, facilitator);
-    const returned = await paymentMiddleware(paidRoutes(cfg.payment!), server)(c, next);
+    const routes = paidRoutes(cfg.payment!);
+    const middleware = paymentMiddleware(routes, server);
+    attachHttpDiscovery(routes as Record<string, { extensions?: Record<string, unknown> }>, PAID_ROUTE_KEYS, cfg.limits); // after creation: see discovery.ts
+    const returned = await middleware(c, next);
     const res = returned ?? c.res;
     // The SDK answers rejected payments (invalid signature, insufficient balance, expired…)
     // with an empty `{}` body and puts the reason only in the base64 PAYMENT-REQUIRED header.

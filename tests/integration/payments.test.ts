@@ -40,8 +40,10 @@ describe("x402 on HTTP — unpaid requests", () => {
       payTo: PAY_TO,
     });
     expect(required.resource?.url).toBe("https://agentread.test/v1/extract");
-    // Bazaar is deliberately not declared on HTTP routes (ajv codegen is forbidden on Workers).
-    expect(required.extensions?.bazaar).toBeUndefined();
+    // Bazaar discovery metadata (CDP Bazaar / agentic.market indexing).
+    const bazaar = (required.extensions as Record<string, { info: { input: Record<string, unknown> }; schema: unknown }> | undefined)?.bazaar;
+    expect(bazaar?.info.input).toMatchObject({ type: "http", method: "POST", bodyType: "json" });
+    expect(bazaar?.schema).toBeDefined();
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("payment_required");
     // No work is done before payment.
@@ -277,5 +279,22 @@ describe("x402 on HTTP — lite engine (EXTRACTION_ENGINE=lite)", () => {
   it("rejects an unknown engine name at config time", async () => {
     const h = harness(routes, { EXTRACTION_ENGINE: "turbo" });
     expect((await h.fetch("/health")).status).toBe(500);
+  });
+});
+
+describe("x402 on HTTP — Bazaar declaration ordering", () => {
+  // @x402/hono validates Bazaar route metadata with ajv only if routes declare it when the
+  // middleware is created; ajv code generation is forbidden on Workers (the test runtime
+  // allows it, so the failure itself is only observable in wrangler dev / production).
+  it("routes carry no Bazaar declaration at middleware creation; attaching adds it", async () => {
+    const { checkIfBazaarNeeded } = await import("@x402/core/server");
+    const { paidRoutes } = await import("../../src/payments/x402.js");
+    const { attachHttpDiscovery } = await import("../../src/payments/discovery.js");
+    const { loadPaymentConfig, DEFAULT_LIMITS } = await import("../../src/config/env.js");
+    const { TEST_ENV } = await import("../helpers/app.js");
+    const routes = paidRoutes(loadPaymentConfig(TEST_ENV, "test")) as Record<string, { extensions?: Record<string, unknown> }>;
+    expect(checkIfBazaarNeeded(routes as never)).toBe(false);
+    attachHttpDiscovery(routes, { "POST /v1/extract": "extract_url", "POST /v1/extract/structured": "extract_url_structured" }, DEFAULT_LIMITS);
+    expect(checkIfBazaarNeeded(routes as never)).toBe(true);
   });
 });

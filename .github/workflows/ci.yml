@@ -38,3 +38,6 @@ jobs:
         env:
           AGENTREAD_URL: ${{ inputs.agentread_url }}
           EXPECT_ENGINE: lite
+      - run: node scripts/validate-bazaar.mjs
+        env:
+          AGENTREAD_URL: ${{ inputs.agentread_url }}

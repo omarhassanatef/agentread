@@ -143,9 +143,7 @@ export function paidRoutes(cfg: PaymentConfig): RoutesConfig {
     mimeType: "application/json",
     serviceName: "AgentRead",
     tags: DISCOVERY_TAGS,
-    // No Bazaar `extensions` on HTTP routes: @x402/hono 2.28 validates them with ajv, which
-    // compiles code at runtime and is forbidden on Workers (errors logged on every request).
-    // HTTP discovery is served by GET / and /openapi.json; MCP tools do carry Bazaar metadata.
+    // Bazaar `extensions` are attached after middleware creation (see attachHttpDiscovery).
     unpaidResponseBody: unpaidBody(cfg, op),
     settlementFailedResponseBody: settlementFailedBody(op),
   });
