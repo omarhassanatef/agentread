@@ -5,10 +5,14 @@ name: Edge benchmark
 on:
   workflow_dispatch:
     inputs:
-      bench_url:
-        description: "Bench Worker URL"
+      targets:
+        description: "mode=url pairs, comma-separated"
         required: true
-        default: "https://agentread-bench.omar-cv.workers.dev"
+        default: "lite=https://agentread-bench-lite.omar-cv.workers.dev,readability=https://agentread-bench-readability.omar-cv.workers.dev,raw=https://agentread-bench-raw.omar-cv.workers.dev"
+      selector:
+        description: "cssSelector for raw mode (optional)"
+        required: false
+        default: ""
       repeat:
         description: "Requests per page per engine"
         required: true
@@ -24,6 +28,8 @@ jobs:
           node-version: 22
       - run: node scripts/bench-edge.mjs
         env:
-          BENCH_URL: ${{ inputs.bench_url }}
+          BENCH_TARGETS: ${{ inputs.targets }}
+          BENCH_SELECTOR: ${{ inputs.selector }}
+          BENCH_PREVIEW: "2500"
           BENCH_TOKEN: ${{ secrets.BENCH_TOKEN }}
           BENCH_REPEAT: ${{ inputs.repeat }}

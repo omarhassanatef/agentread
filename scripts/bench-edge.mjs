@@ -2,7 +2,9 @@
 // Edge benchmark: calls the temporary agentread-bench Worker (src/bench.ts) for both engines
 // on real pages. On the Workers Free plan a CPU-limit kill shows up as HTTP 503 / error 1102.
 //   BENCH_URL=https://agentread-bench.<sub>.workers.dev BENCH_TOKEN=… node scripts/bench-edge.mjs
-const BASE = process.env.BENCH_URL;
+// BENCH_TARGETS="lite=https://…,readability=https://…,raw=https://…" (one Worker per mode), or BENCH_URL for one.
+const TARGETS = (process.env.BENCH_TARGETS ?? `lite=${process.env.BENCH_URL},readability=${process.env.BENCH_URL}`)
+  .split(",").map((t) => t.split("=")).map(([engine, base]) => ({ engine, base }));
 const TOKEN = process.env.BENCH_TOKEN;
 const REPEAT = Number(process.env.BENCH_REPEAT ?? 3);
 const PAGES = (process.env.BENCH_PAGES ?? [
@@ -19,12 +21,12 @@ const PAGES = (process.env.BENCH_PAGES ?? [
 const rows = [];
 const previews = {};
 for (const page of PAGES) {
-  for (const engine of ["lite", "readability"]) {
+  for (const { engine, base } of TARGETS) {
     for (let i = 0; i < REPEAT; i++) {
       const t0 = Date.now();
       let status = 0, body = {}, raw = "";
       try {
-        const res = await fetch(`${BASE}/?engine=${engine}&url=${encodeURIComponent(page)}`, { headers: { "x-bench-token": TOKEN } });
+        const res = await fetch(`${base}/?engine=${engine}&url=${encodeURIComponent(page)}${process.env.BENCH_SELECTOR ? `&selector=${encodeURIComponent(process.env.BENCH_SELECTOR)}` : ""}`, { headers: { "x-bench-token": TOKEN } });
         status = res.status;
         raw = await res.text();
         try { body = JSON.parse(raw); } catch { body = { error: { code: /1102|exceeded/i.test(raw) ? "CPU_LIMIT_1102" : `non-json(${raw.slice(0, 80).replace(/\s+/g, " ")})` } }; }
@@ -43,5 +45,5 @@ for (const r of rows) {
 }
 console.log("SUMMARY", JSON.stringify(summary));
 for (const [k, md] of Object.entries(previews)) {
-  console.log(`\n===== ${k} (${md.length} chars)\n${md.slice(0, 1200)}`);
+  console.log(`\n===== ${k} (${md.length} chars)\n${md.slice(0, Number(process.env.BENCH_PREVIEW ?? 1200))}`);
 }
