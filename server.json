@@ -10,5 +10,9 @@
       "type": "streamable-http",
       "url": "https://agentread.omar-cv.workers.dev/mcp"
     }
-  ]
+  ],
+  "repository": {
+    "url": "https://github.com/omarhassanatef/agentread",
+    "source": "github"
+  }
 }

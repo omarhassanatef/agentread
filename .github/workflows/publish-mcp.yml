@@ -1,0 +1,44 @@
+name: Publish to MCP Registry
+
+# Manual only. Publishes server.json to the official MCP Registry
+# (registry.modelcontextprotocol.io) using GitHub OIDC: no secrets needed; the
+# io.github.omarhassanatef/* namespace is proven by this repository's owner.
+#   gh workflow run publish-mcp.yml -f publish=true
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Actually publish (false = validate only)"
+        required: true
+        default: "false"
+
+permissions:
+  id-token: write # Required for OIDC authentication
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mcp-publisher
+        run: |
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher --help | head -20
+      - name: Check the remote MCP endpoint is reachable
+        run: |
+          curl -sf -X POST https://agentread.omar-cv.workers.dev/mcp \
+            -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-check","version":"1"}}}' | head -c 300
+      - name: Validate server.json
+        run: ./mcp-publisher validate
+      - name: Publish
+        if: inputs.publish == 'true'
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+      - name: Verify listing
+        if: inputs.publish == 'true'
+        run: |
+          sleep 5
+          curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.omarhassanatef/agentread" | head -c 1500
