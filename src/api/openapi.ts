@@ -63,8 +63,23 @@ export function openApiDocument(cfg: AppConfig, origin: string) {
     "504": err("Upstream page timed out. Not charged."),
   });
 
+  // x402scan / AgentCash discovery extension: per-operation payment info (price in USD).
+  const paymentInfo = (op: "extract_url" | "extract_url_structured") =>
+    p
+      ? {
+          "x-payment-info": {
+            protocols: ["x402"],
+            price: { mode: "fixed", currency: "USD", amount: priceFor(p, op).replace(/^\$/, "") },
+            network: p.network,
+            asset: "USDC",
+          },
+        }
+      : {};
+
   return {
     openapi: "3.1.0",
+    // Ownership proof for directory crawlers: the public receiving address of this deployment.
+    ...(p ? { "x-discovery": { ownershipProofs: [p.payTo] } } : {}),
     info: {
       title: "AgentRead API",
       version: SERVICE_VERSION,
@@ -94,6 +109,7 @@ export function openApiDocument(cfg: AppConfig, origin: string) {
           summary: "Extract clean Markdown (paid)",
           operationId: "extract_url",
           description: priceNote("extract_url"),
+          ...paymentInfo("extract_url"),
           parameters: [{ name: "PAYMENT-SIGNATURE", in: "header", required: false, schema: { type: "string" }, description: "Base64 x402 PaymentPayload." }],
           requestBody: { required: true, content: json("ExtractInput") },
           responses: paidResponses("ExtractResult"),
@@ -104,6 +120,7 @@ export function openApiDocument(cfg: AppConfig, origin: string) {
           summary: "Structured extraction (paid)",
           operationId: "extract_url_structured",
           description: priceNote("extract_url_structured"),
+          ...paymentInfo("extract_url_structured"),
           parameters: [{ name: "PAYMENT-SIGNATURE", in: "header", required: false, schema: { type: "string" }, description: "Base64 x402 PaymentPayload." }],
           requestBody: { required: true, content: json("ExtractInput") },
           responses: paidResponses("StructuredResult"),

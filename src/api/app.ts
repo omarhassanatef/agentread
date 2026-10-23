@@ -19,6 +19,7 @@ import { logError, logEvent } from "../utils/log.js";
 import { checkRateLimit, clientKey, createServices, getConfig, getFacilitator, paymentsUnavailable, type AppDeps } from "./context.js";
 import { discoveryDocument } from "./discovery.js";
 import { openApiDocument } from "./openapi.js";
+import { llmsTxt } from "./llms.js";
 
 type Vars = {
   cfg: AppConfig;
@@ -112,6 +113,18 @@ export function createApp(deps: AppDeps = {}) {
     });
   });
   app.get("/openapi.json", (c) => c.json(openApiDocument(c.get("cfg"), new URL(c.req.url).origin)));
+  // x402 discovery fan-out (x402scan compatibility format; OpenAPI above is preferred).
+  app.get("/.well-known/x402", (c) => {
+    const cfg = c.get("cfg");
+    const origin = new URL(c.req.url).origin;
+    return c.json({
+      version: 1,
+      resources: [`${origin}/v1/extract`, `${origin}/v1/extract/structured`],
+      ...(cfg.payment ? { ownershipProofs: [cfg.payment.payTo] } : {}),
+      instructions: "POST JSON {\"url\": \"https://…\"}. Unpaid requests receive an x402 v2 challenge (PAYMENT-REQUIRED header). Free inspection: POST /v1/inspect. MCP: /mcp.",
+    });
+  });
+  app.get("/llms.txt", (c) => c.text(llmsTxt(c.get("cfg"), new URL(c.req.url).origin)));
 
   // ---- Free: inspect -------------------------------------------------------
   app.post("/v1/inspect", limitBody(), async (c) => {

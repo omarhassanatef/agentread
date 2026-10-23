@@ -43,6 +43,30 @@ describe("service endpoints", () => {
     expect(Object.keys(doc.components.schemas)).toEqual(expect.arrayContaining(["ExtractInput", "ExtractResult", "StructuredResult", "InspectResult", "Error"]));
   });
 
+  it("serves x402 discovery metadata (x402scan / AgentCash format) and llms.txt", async () => {
+    const h = harness();
+    const doc = (await (await h.fetch("/openapi.json")).json()) as {
+      "x-discovery": { ownershipProofs: string[] };
+      paths: Record<string, { post?: { "x-payment-info"?: { protocols: string[]; price: Record<string, string> }; responses: Record<string, unknown> } }>;
+    };
+    expect(doc["x-discovery"].ownershipProofs).toEqual(["0x1111111111111111111111111111111111111111"]);
+    const pay = doc.paths["/v1/extract"]!.post!;
+    expect(pay["x-payment-info"]).toMatchObject({ protocols: ["x402"], price: { mode: "fixed", currency: "USD", amount: "0.003" } });
+    expect(pay.responses["402"]).toBeDefined();
+    expect(doc.paths["/v1/extract/structured"]!.post!["x-payment-info"]!.price.amount).toBe("0.005");
+    expect(doc.paths["/v1/inspect"]!.post!["x-payment-info"]).toBeUndefined();
+
+    const wk = (await (await h.fetch("/.well-known/x402")).json()) as { version: number; resources: string[]; ownershipProofs: string[] };
+    expect(wk).toMatchObject({ version: 1, resources: ["https://agentread.test/v1/extract", "https://agentread.test/v1/extract/structured"] });
+
+    const llms = await h.fetch("/llms.txt");
+    expect(llms.headers.get("content-type")).toContain("text/plain");
+    const text = await llms.text();
+    expect(text).toMatch(/^# AgentRead/);
+    expect(text).toContain("$0.003 per successful call");
+    expect(text).toContain("https://agentread.test/mcp");
+  });
+
   it("unknown routes return a JSON 404", async () => {
     const res = await harness().fetch("/v2/nope");
     expect(res.status).toBe(404);

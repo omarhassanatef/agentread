@@ -41,3 +41,5 @@ jobs:
       - run: node scripts/validate-bazaar.mjs
         env:
           AGENTREAD_URL: ${{ inputs.agentread_url }}
+      # x402scan / AgentCash discovery audit (OpenAPI x-payment-info, /.well-known/x402, live 402 probes)
+      - run: npx -y @agentcash/discovery "$(echo '${{ inputs.agentread_url }}' | sed 's#^https\?://##; s#/$##')" -v
