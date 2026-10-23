@@ -59,7 +59,9 @@ if (req) {
   const r = await post("/v1/extract", { url: TARGET }, { "payment-signature": sig });
   const body = await r.json().catch(() => ({}));
   const reason = body?.error?.details?.reason ?? "";
-  check("Live facilitator verifies signature, rejects unfunded payer", r.status === 402 && /insufficient/i.test(reason), reason || `status=${r.status}`);
+  // x402.org reports "insufficient_balance"; the CDP facilitator simulates the transfer and
+  // reports the revert. Either proves the facilitator authenticated us and verified the payload.
+  check("Live facilitator verifies signature, rejects unfunded payer", r.status === 402 && /insufficient|revert/i.test(reason), reason || `status=${r.status}`);
 }
 
 const mcp = new Client({ name: "agentread-smoke", version: "1.0.0" });

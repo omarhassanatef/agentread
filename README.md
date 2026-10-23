@@ -12,7 +12,11 @@ AgentRead is a Cloudflare Worker that turns public web pages into clean, structu
 
 Prices are configuration, not code (see [Configuration](#configuration)).
 
-> **Status: MVP.** What has been verified:
+> **Status: MVP, live.**
+> - **Production (Base mainnet, real USDC):** https://agentread.omar-cv.workers.dev. Payments settle via the CDP facilitator to `0xb866dD8C8401438Efb29b538ec4df11b6b407Ce6`.
+> - **Testnet (Base Sepolia):** https://agentread-testnet.omar-cv.workers.dev
+>
+> What has been verified:
 > - **Automated tests:** all pass (218 tests, run inside the Workers runtime).
 > - **Local smoke test (9/9):** run against `wrangler dev` using the **live x402.org facilitator**. A genuinely signed payment from an unfunded wallet passes signature and requirement checks and is rejected for `insufficient_balance`, so the live wire path is proven up to the transfer itself.
 > - **Testnet deployment:** live at `https://agentread-testnet.omar-cv.workers.dev` and **passes the same 9/9 smoke checks from GitHub Actions** (CI `workflow_dispatch` job). The development network blocks the `workers.dev` IP range, hence the CI vantage point.
