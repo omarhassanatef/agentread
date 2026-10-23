@@ -1,0 +1,66 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agentread",
+  "main": "src/index.ts",
+  // Must not be newer than the workerd bundled with wrangler / @cloudflare/vitest-plugin.
+  "compatibility_date": "2026-08-01",
+  // @x402/hono and @x402/core use Buffer; nodejs_compat provides it.
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "upload_source_maps": true,
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  // Top-level config = local development (`wrangler dev`). Always testnet.
+  // X402_PAY_TO for local dev goes in .dev.vars (see .dev.vars.example).
+  "vars": {
+    "ENVIRONMENT": "development",
+    "X402_NETWORK": "eip155:84532",
+    "X402_FACILITATOR_URL": "https://x402.org/facilitator",
+    "PRICE_EXTRACT_USD": "0.003",
+    "PRICE_EXTRACT_STRUCTURED_USD": "0.005",
+    "DNS_CHECK": "doh"
+  },
+  "ratelimits": [
+    { "name": "INSPECT_RATE_LIMITER", "namespace_id": "41001", "simple": { "limit": 30, "period": 60 } },
+    { "name": "PAID_RATE_LIMITER", "namespace_id": "41002", "simple": { "limit": 120, "period": 60 } }
+  ],
+
+  "env": {
+    "testnet": {
+      "name": "agentread-testnet",
+      "vars": {
+        "ENVIRONMENT": "testnet",
+        "X402_NETWORK": "eip155:84532",
+        "X402_FACILITATOR_URL": "https://x402.org/facilitator",
+        // Public testnet receiving address (not a secret). Generated wallet; key in .secrets/ (gitignored).
+        "X402_PAY_TO": "0xDE20133E787A3cc64565b7AF1cF2bE3bEA3298Ea",
+        "PRICE_EXTRACT_USD": "0.003",
+        "PRICE_EXTRACT_STRUCTURED_USD": "0.005",
+        "DNS_CHECK": "doh"
+      },
+      "ratelimits": [
+        { "name": "INSPECT_RATE_LIMITER", "namespace_id": "41011", "simple": { "limit": 30, "period": 60 } },
+        { "name": "PAID_RATE_LIMITER", "namespace_id": "41012", "simple": { "limit": 120, "period": 60 } }
+      ]
+    },
+    "production": {
+      "name": "agentread",
+      "vars": {
+        "ENVIRONMENT": "production",
+        "X402_NETWORK": "eip155:8453",
+        "X402_FACILITATOR_URL": "https://api.cdp.coinbase.com/platform/v2/x402",
+        // Public receiving address (not a secret). Replace before deploying.
+        "X402_PAY_TO": "0x0000000000000000000000000000000000000000",
+        "PRICE_EXTRACT_USD": "0.003",
+        "PRICE_EXTRACT_STRUCTURED_USD": "0.005",
+        "DNS_CHECK": "doh"
+      },
+      // Secrets (set with `wrangler secret put --env production`):
+      //   CDP_API_KEY_ID, CDP_API_KEY_SECRET
+      "ratelimits": [
+        { "name": "INSPECT_RATE_LIMITER", "namespace_id": "41021", "simple": { "limit": 30, "period": 60 } },
+        { "name": "PAID_RATE_LIMITER", "namespace_id": "41022", "simple": { "limit": 120, "period": 60 } }
+      ]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+# Local development secrets/vars for `wrangler dev`. Copy to .dev.vars (gitignored).
+# Placeholders only. Never commit real values.
+
+# Public address that receives USDC on Base Sepolia (testnet). Required.
+X402_PAY_TO=0xYourTestnetReceivingAddress
+
+# Only needed if you point X402_FACILITATOR_URL at the CDP facilitator.
+# CDP_API_KEY_ID=your-cdp-api-key-id
+# CDP_API_KEY_SECRET=your-cdp-api-key-secret

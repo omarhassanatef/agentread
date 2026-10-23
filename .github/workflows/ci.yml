@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      agentread_url:
+        description: "Deployed AgentRead base URL to smoke-test (unpaid checks only)"
+        required: true
+        default: "https://agentread-testnet.omar-cv.workers.dev"
+
+jobs:
+  check:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # npm 11 avoids the npm 10.9 arborist "edgesOut" bug with vitest peer deps.
+      - run: npx -y npm@11 ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  smoke:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npx -y npm@11 ci
+      - run: npm run smoke:local
+        env:
+          AGENTREAD_URL: ${{ inputs.agentread_url }}
