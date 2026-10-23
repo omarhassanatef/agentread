@@ -50,6 +50,7 @@ describe("service endpoints", () => {
       paths: Record<string, { post?: { "x-payment-info"?: { protocols: string[]; price: Record<string, string> }; responses: Record<string, unknown> } }>;
     };
     expect(doc["x-discovery"].ownershipProofs).toEqual(["0x1111111111111111111111111111111111111111"]);
+    expect((doc as unknown as { info: { contact: { email: string } } }).info.contact.email).toBe("omarhatef@hotmail.com");
     const pay = doc.paths["/v1/extract"]!.post!;
     expect(pay["x-payment-info"]).toMatchObject({ protocols: [{ x402: { version: 2 } }], price: { mode: "fixed", currency: "USD", amount: "0.003" } });
     expect(pay.responses["402"]).toBeDefined();

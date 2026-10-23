@@ -86,7 +86,7 @@ export function openApiDocument(cfg: AppConfig, origin: string) {
       description:
         "Clean web content for AI agents, paid per request via x402. Paid endpoints return HTTP 402 with x402 v2 payment requirements; " +
         "retry with a `PAYMENT-SIGNATURE` header produced by an x402 client (e.g. @x402/fetch). Only successful extractions are settled.",
-      contact: { name: "AgentRead", url: "https://github.com/omarhassanatef/agentread/issues" },
+      contact: { name: "AgentRead", email: "omarhatef@hotmail.com", url: "https://github.com/omarhassanatef/agentread/issues" },
       license: { name: "MIT", url: "https://github.com/omarhassanatef/agentread/blob/main/LICENSE" },
       "x-guidance":
         "Use AgentRead to read a public web page as clean Markdown instead of raw HTML. Call POST /v1/inspect (free) first to check the URL is " +
