@@ -46,5 +46,6 @@
     "viem": "2.57.10",
     "vitest": "4.1.12",
     "wrangler": "4.152.0"
-  }
+  },
+  "license": "MIT"
 }
