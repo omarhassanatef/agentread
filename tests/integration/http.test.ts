@@ -51,13 +51,17 @@ describe("service endpoints", () => {
     };
     expect(doc["x-discovery"].ownershipProofs).toEqual(["0x1111111111111111111111111111111111111111"]);
     const pay = doc.paths["/v1/extract"]!.post!;
-    expect(pay["x-payment-info"]).toMatchObject({ protocols: ["x402"], price: { mode: "fixed", currency: "USD", amount: "0.003" } });
+    expect(pay["x-payment-info"]).toMatchObject({ protocols: [{ x402: { version: 2 } }], price: { mode: "fixed", currency: "USD", amount: "0.003" } });
     expect(pay.responses["402"]).toBeDefined();
     expect(doc.paths["/v1/extract/structured"]!.post!["x-payment-info"]!.price.amount).toBe("0.005");
     expect(doc.paths["/v1/inspect"]!.post!["x-payment-info"]).toBeUndefined();
 
     const wk = (await (await h.fetch("/.well-known/x402")).json()) as { version: number; resources: string[]; ownershipProofs: string[] };
     expect(wk).toMatchObject({ version: 1, resources: ["https://agentread.test/v1/extract", "https://agentread.test/v1/extract/structured"] });
+
+    const icon = await h.fetch("/favicon.png");
+    expect(icon.headers.get("content-type")).toBe("image/png");
+    expect(new Uint8Array(await icon.arrayBuffer()).slice(1, 4)).toEqual(new Uint8Array([0x50, 0x4e, 0x47])); // "PNG"
 
     const llms = await h.fetch("/llms.txt");
     expect(llms.headers.get("content-type")).toContain("text/plain");

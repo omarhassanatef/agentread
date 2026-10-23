@@ -130,7 +130,8 @@ function settlementFailedBody(op: PaidOperation) {
 }
 
 /** x402 route table for @x402/hono's paymentMiddleware. */
-export function paidRoutes(cfg: PaymentConfig): RoutesConfig {
+/** `iconUrl` must be an absolute, public PNG/JPG URL (CDP Bazaar); pass the deployment's /icon.png. */
+export function paidRoutes(cfg: PaymentConfig, iconUrl?: string): RoutesConfig {
   const route = (op: PaidOperation, description: string) => ({
     accepts: {
       scheme: "exact",
@@ -143,6 +144,7 @@ export function paidRoutes(cfg: PaymentConfig): RoutesConfig {
     mimeType: "application/json",
     serviceName: "AgentRead",
     tags: DISCOVERY_TAGS,
+    ...(iconUrl ? { iconUrl } : {}),
     // Bazaar `extensions` are attached after middleware creation (see attachHttpDiscovery).
     unpaidResponseBody: unpaidBody(cfg, op),
     settlementFailedResponseBody: settlementFailedBody(op),

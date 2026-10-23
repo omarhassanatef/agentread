@@ -68,13 +68,13 @@ export function openApiDocument(cfg: AppConfig, origin: string) {
     p
       ? {
           "x-payment-info": {
-            protocols: ["x402"],
             price: { mode: "fixed", currency: "USD", amount: priceFor(p, op).replace(/^\$/, "") },
-            network: p.network,
-            asset: "USDC",
+            protocols: [{ x402: { version: 2, scheme: "exact", network: p.network, asset: "USDC" } }],
           },
         }
       : {};
+  /** Explicitly public (no auth, no payment) for discovery auditors. */
+  const pub = { security: [] as unknown[] };
 
   return {
     openapi: "3.1.0",
@@ -86,15 +86,24 @@ export function openApiDocument(cfg: AppConfig, origin: string) {
       description:
         "Clean web content for AI agents, paid per request via x402. Paid endpoints return HTTP 402 with x402 v2 payment requirements; " +
         "retry with a `PAYMENT-SIGNATURE` header produced by an x402 client (e.g. @x402/fetch). Only successful extractions are settled.",
+      contact: { name: "AgentRead", url: "https://github.com/omarhassanatef/agentread/issues" },
+      license: { name: "MIT", url: "https://github.com/omarhassanatef/agentread/blob/main/LICENSE" },
+      "x-guidance":
+        "Use AgentRead to read a public web page as clean Markdown instead of raw HTML. Call POST /v1/inspect (free) first to check the URL is " +
+        "reachable and extractable. Then call POST /v1/extract for Markdown, or POST /v1/extract/structured when you also need metadata, " +
+        "headings and links separately. Bodies are JSON: {\"url\": \"https://…\", \"maxCharacters\"?: number, \"includeLinks\"?: boolean}. " +
+        "Paid calls follow x402 v2: an unpaid call returns 402 with a PAYMENT-REQUIRED header; retry with PAYMENT-SIGNATURE. Failed " +
+        "extractions (4xx/5xx) are not charged. JavaScript is not executed; pages that need it return javascript_required.",
     },
     servers: [{ url: origin }],
     paths: {
-      "/health": { get: { summary: "Health check", responses: { "200": { description: "Service is up." } } } },
-      "/": { get: { summary: "Service discovery document (operations, prices, limits)", responses: { "200": { description: "Discovery JSON." } } } },
+      "/health": { get: { summary: "Health check", ...pub, responses: { "200": { description: "Service is up." } } } },
+      "/": { get: { summary: "Service discovery document (operations, prices, limits)", ...pub, responses: { "200": { description: "Discovery JSON." } } } },
       "/v1/inspect": {
         post: {
           summary: "Inspect a URL (free)",
           operationId: "inspect_url",
+          ...pub,
           requestBody: { required: true, content: json("InspectInput") },
           responses: {
             "200": { description: "Inspection result. Upstream failures are reported in the body (reachable=false, limitation).", content: json("InspectResult") },
@@ -129,6 +138,7 @@ export function openApiDocument(cfg: AppConfig, origin: string) {
       "/mcp": {
         post: {
           summary: "MCP Streamable HTTP endpoint (stateless, JSON responses)",
+          ...pub,
           description:
             "JSON-RPC 2.0 per the MCP Streamable HTTP transport. Tools: inspect_url, extract_url, extract_url_structured. " +
             "Paid tools return an x402 PaymentRequired tool result (isError=true, structuredContent) and accept payment in `params._meta[\"x402/payment\"]`.",

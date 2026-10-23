@@ -40,6 +40,7 @@ describe("x402 on HTTP — unpaid requests", () => {
       payTo: PAY_TO,
     });
     expect(required.resource?.url).toBe("https://agentread.test/v1/extract");
+    expect(required.resource?.iconUrl).toBe("https://agentread.test/icon.png");
     // Bazaar discovery metadata (CDP Bazaar / agentic.market indexing).
     const bazaar = (required.extensions as Record<string, { info: { input: Record<string, unknown> }; schema: unknown }> | undefined)?.bazaar;
     expect(bazaar?.info.input).toMatchObject({ type: "http", method: "POST", bodyType: "json" });

@@ -20,6 +20,7 @@ import { checkRateLimit, clientKey, createServices, getConfig, getFacilitator, p
 import { discoveryDocument } from "./discovery.js";
 import { openApiDocument } from "./openapi.js";
 import { llmsTxt } from "./llms.js";
+import { ICON_PNG_BASE64 } from "./icon.js";
 
 type Vars = {
   cfg: AppConfig;
@@ -125,6 +126,10 @@ export function createApp(deps: AppDeps = {}) {
     });
   });
   app.get("/llms.txt", (c) => c.text(llmsTxt(c.get("cfg"), new URL(c.req.url).origin)));
+  const icon = Uint8Array.from(atob(ICON_PNG_BASE64), (ch) => ch.charCodeAt(0));
+  for (const path of ["/favicon.png", "/icon.png"]) {
+    app.get(path, () => new Response(icon, { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } }));
+  }
 
   // ---- Free: inspect -------------------------------------------------------
   app.post("/v1/inspect", limitBody(), async (c) => {
@@ -175,7 +180,7 @@ export function createApp(deps: AppDeps = {}) {
     const cfg = c.get("cfg");
     const facilitator = getFacilitator(cfg, deps);
     const server = createResourceServer(cfg.payment!, facilitator);
-    const routes = paidRoutes(cfg.payment!);
+    const routes = paidRoutes(cfg.payment!, `${new URL(c.req.url).origin}/icon.png`);
     const middleware = paymentMiddleware(routes, server);
     attachHttpDiscovery(routes as Record<string, { extensions?: Record<string, unknown> }>, PAID_ROUTE_KEYS, cfg.limits); // after creation: see discovery.ts
     const returned = await middleware(c, next);
