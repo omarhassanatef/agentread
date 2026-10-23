@@ -23,6 +23,8 @@ src/extraction/fetch.ts        safeFetch (manual redirects, per-hop validation, 
 src/extraction/html.ts         linkedom parse, metadata, URL absolutisation, boilerplate removal, structure fixes
 src/extraction/extract.ts      Readability → fallbacks → headings/links
 src/extraction/markdown.ts     Turndown (+ GFM tables), truncation
+src/extraction/lite.ts         lite engine: content-root hint → Workers AI toMarkdown → cheap cleanup
+src/bench.ts                   temporary edge-benchmark Worker (wrangler.bench.jsonc, .github/workflows/bench.yml)
 src/security/*                 URL policy, IP ranges, DoH guard
 src/payments/x402.ts           facilitator client (+ /supported cache), resource server + hooks, routes/prices
 src/schemas/index.ts           versioned zod schemas (input, results)
@@ -39,6 +41,7 @@ src/config/env.ts              config parsing/validation
 | **Stateless MCP** (`WebStandardStreamableHTTPServerTransport`, `sessionIdGenerator: undefined`, `enableJsonResponse: true`) | No Durable Objects or session storage. Each request builds a fresh server. `GET`/`DELETE /mcp` → 405 |
 | **cfworker JSON-schema validator for MCP** | The SDK's default (ajv) compiles code with `new Function`, which Workers forbids |
 | **No `outputSchema` on paid MCP tools** | SDK clients validate `structuredContent` against `outputSchema` even on error results, which rejects x402 payment challenges. Observed against the real TS client |
+| **Two extraction engines** (`EXTRACTION_ENGINE`) | The Workers Free plan allows ~10 ms CPU. Measured on the edge, Readability needs p50 ≈ 70 ms and is killed; passing the page to Workers AI `toMarkdown` with a content-root selector (`src/extraction/lite.ts`) runs at p50 ≈ 10–13 ms and was never killed. An HTMLRewriter cleanup pass was tried and dropped: about 25 ms with no quality gain |
 | **linkedom + @mozilla/readability + turndown (+ @joplin/turndown-plugin-gfm)** | Pure-JS DOM that runs in workerd (verified by the test suite running in workerd). Two small adaptations: a `rows` getter for linkedom tables (GFM plugin), and structure normalisation for common Readability failure modes |
 | **Deterministic extraction only** | No LLM calls. Output depends only on the page bytes |
 | **Workers Rate Limiting bindings** | Free and built in, no storage. Approximate and per-location |

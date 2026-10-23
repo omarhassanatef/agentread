@@ -26,7 +26,8 @@ const post = (path, body, headers = {}) =>
 
 const health = await fetch(`${BASE}/health`);
 const h = await health.json();
-check("GET /health", health.status === 200 && h.status === "ok", JSON.stringify(h.payments));
+check("GET /health", health.status === 200 && h.status === "ok", `${JSON.stringify(h.payments)} engine=${h.extractionEngine}`);
+if (process.env.EXPECT_ENGINE) check(`Extraction engine is ${process.env.EXPECT_ENGINE}`, h.extractionEngine === process.env.EXPECT_ENGINE, h.extractionEngine);
 
 const inspect = await post("/v1/inspect", { url: TARGET });
 const i = await inspect.json();

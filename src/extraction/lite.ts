@@ -165,6 +165,8 @@ export function stripLinks(md: string): string {
 
 /** Upper bound on Markdown scanned for headings/links, to keep CPU bounded on huge pages. */
 const ANALYSIS_LIMIT = 100_000;
+/** Converter output beyond this is never returned (MAX_CHARACTERS_LIMIT ≤ 100k), so it is not processed. */
+const OUTPUT_LIMIT = 120_000;
 
 function headingsAndLinks(md: string, opts: ContentOptions) {
   const scan = md.length > ANALYSIS_LIMIT ? md.slice(0, ANALYSIS_LIMIT) : md;
@@ -205,14 +207,18 @@ export async function extractLite(html: string, pageUrl: string, opts: ContentOp
   const head = headSection(html);
   const cssSelector = chooseRootSelector(html);
 
+  // Converter output can be far larger than anything we return (240k+ chars on long
+  // Wikipedia pages). Clean and analyse a bounded prefix only: the API never returns more
+  // than MAX_CHARACTERS_LIMIT, so this caps CPU without changing what clients receive.
+  const bounded = (s: string) => (s.length > OUTPUT_LIMIT ? s.slice(0, OUTPUT_LIMIT) : s);
   let raw = await convert(html, { pageUrl, ...(cssSelector ? { cssSelector } : {}) });
   let { fm, body } = splitFrontMatter(raw);
-  let markdown = cleanMarkdown(body, pageUrl);
+  let markdown = cleanMarkdown(bounded(body), pageUrl);
   if (cssSelector && markdown.length < 40) {
     // The selector matched nothing useful: convert the whole document instead.
     raw = await convert(html, { pageUrl });
     ({ fm, body } = splitFrontMatter(raw));
-    markdown = cleanMarkdown(body, pageUrl);
+    markdown = cleanMarkdown(bounded(body), pageUrl);
   }
 
   const titleTag = /<title[^>]*>([\s\S]{0,1000}?)<\/title>/i.exec(head)?.[1];

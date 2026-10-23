@@ -97,6 +97,8 @@ export function createApp(deps: AppDeps = {}) {
       service: "agentread",
       version: SERVICE_VERSION,
       environment: cfg.environment,
+      // Active engine: "lite" only when the Workers AI binding is actually present.
+      extractionEngine: c.get("svc").markdownConverter ? "lite" : "readability",
       payments: cfg.payment
         ? { enabled: true, network: cfg.payment.network, networkName: SUPPORTED_NETWORKS[cfg.payment.network].name }
         : { enabled: false },

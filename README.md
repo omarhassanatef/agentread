@@ -16,7 +16,8 @@ Prices are configuration, not code (see [Configuration](#configuration)).
 > - **Automated tests:** all pass (218 tests, run inside the Workers runtime).
 > - **Local smoke test (9/9):** run against `wrangler dev` using the **live x402.org facilitator**. A genuinely signed payment from an unfunded wallet passes signature and requirement checks and is rejected for `insufficient_balance`, so the live wire path is proven up to the transfer itself.
 > - **Testnet deployment:** live at `https://agentread-testnet.omar-cv.workers.dev` and **passes the same 9/9 smoke checks from GitHub Actions** (CI `workflow_dispatch` job). The development network blocks the `workers.dev` IP range, hence the CI vantage point.
-> - **Not yet exercised on the deployed edge:** a paid extraction, including its CPU usage against the plan's limit.
+> - **Runs on the Workers Free plan.** The deployed `lite` engine had no CPU-limit kills in about 180 benchmark requests on Cloudflare's edge (Free account); the `readability` engine was killed in up to 84% of them. See [Extraction engines](#extraction-engines).
+> - **Not yet exercised on the deployed edge:** a *paid* extraction through the product Worker. The same extraction code was benchmarked on the edge, but no funded payment has gone through.
 >
 > **A funded live payment has not yet been made** (see [Testnet payment demo](#testnet-payment-demo)). Read [Limitations](#limitations) before relying on it.
 
@@ -283,6 +284,7 @@ Non-secret configuration lives in `wrangler.jsonc` (`vars`, per environment). Se
 | `PRICE_EXTRACT_USD` | yes | `0.003` | Decimal USD, ≤ 6 decimals, 0 < price ≤ 1 |
 | `PRICE_EXTRACT_STRUCTURED_USD` | yes | `0.005` | |
 | `DNS_CHECK` | no | `doh` | `doh` = DNS-over-HTTPS pre-check of every hop; `off` disables it |
+| `EXTRACTION_ENGINE` | no | `lite` in `wrangler.jsonc` (code default `readability`) | `lite` = Workers AI `toMarkdown` (fits the Free plan); `readability` = linkedom + Readability (best quality, needs Workers Paid). Needs the `AI` binding; without it the service falls back to `readability` and logs `config.lite_engine_without_ai`. `GET /health` reports the active engine |
 | `DOH_URL` | no | `https://cloudflare-dns.com/dns-query` | |
 | `FETCH_TIMEOUT_MS` | no | `10000` | Overall deadline incl. redirects and body |
 | `MAX_RESPONSE_BYTES` | no | `3000000` | Download cap for extraction |
@@ -323,7 +325,8 @@ Only the blockchain is simulated (`tests/helpers/facilitator.ts`), along with up
 ## Deploying to Cloudflare
 
 Prerequisites:
-- A Cloudflare account on the **Workers Paid plan** ($5/month). Extraction uses roughly 50–250 ms of CPU on typical 100–400 KB pages, measured locally in Node; the Free plan's 10 ms CPU limit will terminate most extractions.
+- A Cloudflare account. **The Free plan works** with `EXTRACTION_ENGINE=lite`, the configured default. Switch to `readability` only on Workers Paid ($5/month); see [Extraction engines](#extraction-engines).
+- Workers AI enabled on the account (it is by default). HTML→Markdown conversion is documented as free; image descriptions, which are paid, are explicitly disabled.
 - `npx wrangler login`.
 
 ### Testnet (`workers.dev`)
@@ -384,16 +387,34 @@ Structured JSON logs (`console.log`), with no secrets, payment payloads, signatu
 
 These answer: request volume, success rate, failure reasons, latency, unique and repeat payers (`payer` hash), and verify/settle failures. Query them in Workers Observability.
 
+## Extraction engines
+
+The same API, schemas and payment flow run on either engine (`EXTRACTION_ENGINE`):
+
+| | `lite` (default) | `readability` |
+|---|---|---|
+| How | Picks a content root (`#mw-content-text`, `.markdown-body`, single `<article>`, `<main>`, `[role=main]`) with substring checks. Hands the page to **Workers AI `toMarkdown`** (conversion runs outside our JS). Reads metadata from `<head>` with a few regexes. Removes known noise line by line | linkedom DOM, boilerplate removal, Mozilla Readability, Turndown (GFM tables) |
+| Edge CPU per request (measured, real pages) | p50 ≈ 10–13 ms, p90 ≈ 35–47 ms | p50 ≈ 70–80 ms, p75 ≈ 120–285 ms |
+| On the Workers Free plan | **0 CPU-limit kills in ~180 requests** (5 benchmark runs) | Killed in 33–84% of requests (error 1102) |
+| Quality | Good on docs, articles, Wikipedia and GitHub READMEs. Weaker on pages without a clear content root, some GitHub code blocks lose their fences, and index pages are noisy | Best overall; content scoring handles arbitrary layouts |
+| Extra dependency | Workers AI `toMarkdown` (documented as free for HTML) | none |
+
+The measurements come from the temporary `src/bench.ts` Worker driven by `.github/workflows/bench.yml`, with CPU percentiles from Cloudflare's GraphQL analytics (Oct 2026). Free-plan CPU enforcement isn't a simple per-request 10 ms cutoff: lite's measured CPU exceeds 10 ms but it was never killed. Enforcement is opaque and could change, so re-run the benchmark if you see `1102` errors. Once revenue justifies $5/month, switch to Workers Paid and `EXTRACTION_ENGINE=readability`.
+
 ## Pricing and cost notes
 
 Default prices: $0.003 (extract) and $0.005 (structured). Before changing them, account for these costs (Oct 2026, verify current prices):
-- **Cloudflare Workers Paid:** $5/month minimum. It includes 10M requests and 30M CPU-ms, then $0.30 per million requests and $0.02 per million CPU-ms. At ~150 CPU-ms per extraction, compute is about $0.000003 per request after the allowance, which is negligible.
+- **Cloudflare Workers:**
+  - **Free** with the `lite` engine: 100k requests/day, $0.
+  - **Paid** ($5/month minimum, needed for `readability`) includes 10M requests and 30M CPU-ms, then $0.30 per million requests and $0.02 per million CPU-ms. At about 80 CPU-ms per Readability extraction, compute is about $0.000002 per request after the allowance.
+- **Workers AI `toMarkdown`:** documented as free for HTML. AgentRead never enables image conversion, which would use paid AI models.
 - **CDP facilitator (mainnet):** the first 1,000 settlements per month are free, then **$0.001 per settlement**. At $0.003 that is **33% of revenue**; at $0.005 it is 20%. This is the dominant marginal cost. Batch settlement, which the SDK supports, would reduce it (see next steps).
 - **Gas:** in the `exact` EIP-3009 flow the payer only signs an authorization. The facilitator submits the settlement transaction, so the payer needs no ETH. CDP states that gas is paid on-chain separately from its fee. Check the facilitator's current terms for whether it passes gas costs on.
 - **Browser rendering** (deferred) would add roughly per-second browser costs and should be priced separately if added.
 
 ## Limitations
 
+- **Lite engine quality** (Free-plan default) is below Readability on pages without a clear content root. Some GitHub code blocks lose their fences. It depends on Workers AI `toMarkdown` staying free for HTML.
 - **No JavaScript execution.** Client-rendered pages return `javascript_required` (422, not charged). `inspect_url` flags likely cases with `mayRequireJavaScript`.
 - **Supported content:** HTML/XHTML, `text/plain` and `text/markdown` only. PDFs, images and JSON are rejected with `unsupported_content_type`.
 - Access controls are respected: no cookies, auth headers or client credentials are ever forwarded, and paywalls and CAPTCHAs are not bypassed.
@@ -418,7 +439,7 @@ Default prices: $0.003 (extract) and $0.005 (structured). Before changing them, 
 | 402 even after paying | The payer may lack USDC on the right network, the authorization may have expired (`maxTimeoutSeconds: 120`), the amount may have been for the other endpoint, or the payload was replayed. `payment.verify_rejected` logs the reason |
 | `javascript_required` | The page renders client-side. AgentRead does not run JavaScript |
 | `blocked_destination` for a public site | The site resolves to a non-public IP, uses a non-default port, or is an IP-literal URL |
-| Extractions fail with CPU-limit errors after deploy | You are on the Workers Free plan. Upgrade to Paid |
+| Extractions fail with `1102` / CPU-limit errors | On the Free plan, make sure `EXTRACTION_ENGINE=lite` **and** the `AI` binding exist in that environment (`GET /health` → `"extractionEngine":"lite"`). Wrangler does not inherit bindings into `env.*` blocks |
 | `wrangler dev` complains about the compatibility date | Keep `compatibility_date` no newer than the bundled workerd (`npx wrangler --version`) |
 
 ## Project layout

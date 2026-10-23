@@ -20,6 +20,7 @@ describe("service endpoints", () => {
     expect(await res.json()).toMatchObject({
       status: "ok",
       service: "agentread",
+      extractionEngine: "readability",
       payments: { enabled: true, network: "eip155:84532", networkName: "Base Sepolia" },
     });
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");

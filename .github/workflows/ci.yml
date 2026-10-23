@@ -37,3 +37,4 @@ jobs:
       - run: npm run smoke:local
         env:
           AGENTREAD_URL: ${{ inputs.agentread_url }}
+          EXPECT_ENGINE: lite

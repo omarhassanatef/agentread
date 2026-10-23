@@ -20,7 +20,9 @@
     "X402_FACILITATOR_URL": "https://x402.org/facilitator",
     "PRICE_EXTRACT_USD": "0.003",
     "PRICE_EXTRACT_STRUCTURED_USD": "0.005",
-    "DNS_CHECK": "doh"
+    "DNS_CHECK": "doh",
+    // "lite" fits the Workers Free plan (measured); switch to "readability" on Workers Paid.
+    "EXTRACTION_ENGINE": "lite"
   },
   "ratelimits": [
     { "name": "INSPECT_RATE_LIMITER", "namespace_id": "41001", "simple": { "limit": 30, "period": 60 } },
@@ -30,6 +32,8 @@
   "env": {
     "testnet": {
       "name": "agentread-testnet",
+      // Bindings are not inherited by environments; declare the AI binding per env.
+      "ai": { "binding": "AI" },
       "vars": {
         "ENVIRONMENT": "testnet",
         "X402_NETWORK": "eip155:84532",
@@ -38,7 +42,8 @@
         "X402_PAY_TO": "0xDE20133E787A3cc64565b7AF1cF2bE3bEA3298Ea",
         "PRICE_EXTRACT_USD": "0.003",
         "PRICE_EXTRACT_STRUCTURED_USD": "0.005",
-        "DNS_CHECK": "doh"
+        "DNS_CHECK": "doh",
+        "EXTRACTION_ENGINE": "lite"
       },
       "ratelimits": [
         { "name": "INSPECT_RATE_LIMITER", "namespace_id": "41011", "simple": { "limit": 30, "period": 60 } },
@@ -47,6 +52,7 @@
     },
     "production": {
       "name": "agentread",
+      "ai": { "binding": "AI" },
       "vars": {
         "ENVIRONMENT": "production",
         "X402_NETWORK": "eip155:8453",
@@ -55,7 +61,8 @@
         "X402_PAY_TO": "0x0000000000000000000000000000000000000000",
         "PRICE_EXTRACT_USD": "0.003",
         "PRICE_EXTRACT_STRUCTURED_USD": "0.005",
-        "DNS_CHECK": "doh"
+        "DNS_CHECK": "doh",
+        "EXTRACTION_ENGINE": "lite"
       },
       // Secrets (set with `wrangler secret put --env production`):
       //   CDP_API_KEY_ID, CDP_API_KEY_SECRET
