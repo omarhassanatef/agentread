@@ -12,12 +12,36 @@ AgentRead is a Cloudflare Worker that turns public web pages into clean, structu
 
 Prices are configuration, not code (see [Configuration](#configuration)).
 
+## Use it now
+
+**Service:** `https://agentread.omar-cv.workers.dev` · **MCP:** `https://agentread.omar-cv.workers.dev/mcp` · Listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.omarhassanatef/agentread) as `io.github.omarhassanatef/agentread` and on [x402scan](https://www.x402scan.com)
+
+Try the free inspection:
+
+```bash
+curl -s -X POST https://agentread.omar-cv.workers.dev/v1/inspect \
+  -H 'content-type: application/json' -d '{"url":"https://example.com/"}'
+```
+
+Add it to an MCP client (`inspect_url` works in any client; the paid tools need an x402-capable client such as [`@x402/mcp`](https://www.npmjs.com/package/@x402/mcp)):
+
+```bash
+claude mcp add --transport http agentread https://agentread.omar-cv.workers.dev/mcp
+```
+
+```json
+{ "mcpServers": { "agentread": { "url": "https://agentread.omar-cv.workers.dev/mcp" } } }
+```
+
+Pay per call from code with an x402 client: see [Paying with an x402 client](#paying-with-an-x402-client-http) and [MCP](#mcp). Agent-readable docs: [`/llms.txt`](https://agentread.omar-cv.workers.dev/llms.txt), [`/openapi.json`](https://agentread.omar-cv.workers.dev/openapi.json), [`/.well-known/x402`](https://agentread.omar-cv.workers.dev/.well-known/x402).
+
 > **Status: MVP, live.**
 > - **Production (Base mainnet, real USDC):** https://agentread.omar-cv.workers.dev. Payments settle via the CDP facilitator to `0xb866dD8C8401438Efb29b538ec4df11b6b407Ce6`.
 > - **Testnet:** no hosted testnet. `npm run dev` runs locally against Base Sepolia and the free x402.org facilitator.
 >
 > What has been verified:
-> - **Automated tests:** all pass (233 tests, run inside the Workers runtime).
+> - **Automated tests:** all pass (237 tests, run inside the Workers runtime).
+> - **Directory checks:** both paid endpoints pass the CDP Bazaar validator (all preflight checks) and the AgentCash/x402scan discovery audit, and are registered on x402scan.
 > - **Local smoke test (9/9):** run against `wrangler dev` using the **live x402.org facilitator**. A genuinely signed payment from an unfunded wallet passes signature and requirement checks and is rejected for `insufficient_balance`, so the live wire path is proven up to the transfer itself.
 > - **Production deployment:** passes all smoke checks from GitHub Actions (`gh workflow run CI`). The live CDP facilitator authenticates AgentRead and verifies signed payments. The development network blocks the `workers.dev` IP range, hence the CI vantage point.
 > - **Runs on the Workers Free plan.** The deployed `lite` engine had no CPU-limit kills in about 180 benchmark requests on Cloudflare's edge (Free account); the `readability` engine was killed in up to 84% of them. See [Extraction engines](#extraction-engines).
