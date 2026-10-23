@@ -254,9 +254,26 @@ export interface JsSignals {
 
 /** Heuristics for pages that render their content client-side. Run on raw HTML. */
 export function detectJavaScriptSignals(html: string): JsSignals {
-  const scriptCount = (html.match(/<script\b/gi) ?? []).length;
-  const noscriptWarning = /<noscript[^>]*>[\s\S]{0,500}?(enable|requires?|turn on|need)[\s\S]{0,40}?javascript/i.test(html);
-  const emptyAppRoot = /<div[^>]+id=["'](?:root|app|__next|__nuxt|___gatsby|svelte|main-app)["'][^>]*>\s*<\/div>/i.test(html);
+  // Substring scans + regexes on small windows only: this runs on every extraction,
+  // including the CPU-constrained lite engine.
+  let scriptCount = 0;
+  for (let i = html.indexOf("<script"); i !== -1 && scriptCount < 1000; i = html.indexOf("<script", i + 7)) scriptCount++;
+  let noscriptWarning = false;
+  for (let i = html.indexOf("<noscript"), n = 0; i !== -1 && n < 20; i = html.indexOf("<noscript", i + 9), n++) {
+    if (/(enable|requires?|turn on|need)[\s\S]{0,40}?javascript/i.test(html.slice(i, i + 600))) {
+      noscriptWarning = true;
+      break;
+    }
+  }
+  let emptyAppRoot = false;
+  for (const id of ["root", "app", "__next", "__nuxt", "___gatsby", "svelte", "main-app"]) {
+    for (const q of ['"', "'"]) {
+      const at = html.indexOf(`id=${q}${id}${q}`);
+      if (at === -1) continue;
+      const close = html.indexOf(">", at);
+      if (close !== -1 && /^\s*<\/div>/.test(html.slice(close + 1, close + 200))) emptyAppRoot = true;
+    }
+  }
   return { mayRequireJavaScript: noscriptWarning || emptyAppRoot, scriptCount };
 }
 

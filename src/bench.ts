@@ -48,7 +48,7 @@ export default {
     const cfg = { ...loadConfig({ ...env, EXTRACTION_ENGINE: engine }) };
     const svc = createServices(cfg, {}, env);
     try {
-      const r = await extractUrl({ url, maxCharacters: 100_000 }, svc);
+      const r = await extractUrl({ url }, svc); // product defaults (20k chars)
       return Response.json({
         engine,
         method: r.extraction.method,

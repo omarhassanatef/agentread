@@ -62,11 +62,11 @@ const ROOT_HINTS: Array<{ needle: string; selector: string }> = [
 
 export function chooseRootSelector(html: string): string | undefined {
   for (const h of ROOT_HINTS) if (html.includes(h.needle)) return h.selector;
-  const lower = html.length > 600_000 ? html.slice(0, 600_000).toLowerCase() : html.toLowerCase();
-  const firstArticle = lower.indexOf("<article");
-  if (firstArticle !== -1 && lower.indexOf("<article", firstArticle + 8) === -1) return "article";
-  if (lower.includes("<main")) return "main";
-  if (lower.includes('role="main"') || lower.includes("role='main'")) return '[role="main"]';
+  // Tags are almost always lower-case in served HTML; avoid copying the page to lower-case it.
+  const firstArticle = html.indexOf("<article");
+  if (firstArticle !== -1 && html.indexOf("<article", firstArticle + 8) === -1) return "article";
+  if (html.includes("<main") || html.includes("<MAIN")) return "main";
+  if (html.includes('role="main"') || html.includes("role='main'")) return '[role="main"]';
   return undefined; // whole document; the converter drops <head>, <header>, <footer>, scripts, styles
 }
 
@@ -131,18 +131,18 @@ const NOISE_LINE = new RegExp(
 
 /** Cheap, line-based cleanup of converter output. Linear in the Markdown size. */
 export function cleanMarkdown(md: string, pageUrl: string): string {
-  const lines = md.replace(/\r\n?/g, "\n").split("\n");
+  const protocol = new URL(pageUrl).protocol;
+  const lines = (md.includes("\r") ? md.replace(/\r\n?/g, "\n") : md).split("\n");
   const out: string[] = [];
   let inFence = false;
   for (let line of lines) {
     if (/^\s*```/.test(line)) inFence = !inFence;
     if (!inFence) {
-      const t = line.trim();
-      if (NOISE_LINE.test(t)) continue;
+      if (line.length < 120 && NOISE_LINE.test(line.trim())) continue;
       // Anchor-only links (heading permalinks, TOC entries) → plain text.
-      line = line.replace(/\[([^\]]*)\]\(#[^)]*\)/g, "$1");
+      if (line.includes("](#")) line = line.replace(/\[([^\]]*)\]\(#[^)]*\)/g, "$1");
       // Protocol-relative image/link URLs → absolute.
-      line = line.replace(/\]\(\/\/([^)\s]+)/g, (_m, rest: string) => `](${new URL(pageUrl).protocol}//${rest}`);
+      if (line.includes("](//")) line = line.replace(/\]\(\/\/([^)\s]+)/g, (_m, rest: string) => `](${protocol}//${rest}`);
     }
     out.push(line);
   }
@@ -164,7 +164,7 @@ export function stripLinks(md: string): string {
 }
 
 /** Upper bound on Markdown scanned for headings/links, to keep CPU bounded on huge pages. */
-const ANALYSIS_LIMIT = 200_000;
+const ANALYSIS_LIMIT = 100_000;
 
 function headingsAndLinks(md: string, opts: ContentOptions) {
   const scan = md.length > ANALYSIS_LIMIT ? md.slice(0, ANALYSIS_LIMIT) : md;
@@ -239,7 +239,8 @@ export async function extractLite(html: string, pageUrl: string, opts: ContentOp
     metadata,
     markdown,
     ...links,
-    textLength: normalizeWhitespace(stripLinks(markdown.length > ANALYSIS_LIMIT ? markdown.slice(0, ANALYSIS_LIMIT) : markdown)).length,
+    // Only needs to distinguish "empty" from "has content": a bounded prefix is enough.
+    textLength: normalizeWhitespace(stripLinks(markdown.slice(0, 4000))).length,
     mayRequireJavaScript: js.mayRequireJavaScript,
   };
 }

@@ -169,7 +169,8 @@ async function fetchAndExtract(input: ExtractInput, svc: Services, target?: Vali
   return { doc, content, charset, warnings };
 }
 
-function extractionInfo(full: FullExtraction, characters: number, startedAt: number): ExtractionInfo {
+function extractionInfo(full: FullExtraction, returned: string, startedAt: number): ExtractionInfo {
+  const characters = returned.length;
   return {
     method: full.content.method,
     statusCode: full.doc.status,
@@ -179,7 +180,7 @@ function extractionInfo(full: FullExtraction, characters: number, startedAt: num
     bytesFetched: full.doc.body.length,
     characters,
     totalCharacters: full.content.markdown.length,
-    words: countWords(full.content.markdown),
+    words: countWords(returned), // of the returned Markdown: bounded CPU on huge pages
     warnings: full.warnings,
     durationMs: Date.now() - startedAt,
   };
@@ -199,7 +200,7 @@ export async function extractUrl(input: ExtractInput, svc: Services, target?: Va
     markdown: text,
     headings: full.content.headings,
     truncated,
-    extraction: extractionInfo(full, text.length, startedAt),
+    extraction: extractionInfo(full, text, startedAt),
   };
 }
 
@@ -219,6 +220,6 @@ export async function extractUrlStructured(input: ExtractInput, svc: Services, t
     links: full.content.links,
     linksTruncated: full.content.linksTruncated,
     truncated,
-    extraction: extractionInfo(full, text.length, startedAt),
+    extraction: extractionInfo(full, text, startedAt),
   };
 }

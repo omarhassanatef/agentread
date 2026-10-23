@@ -55,7 +55,7 @@ export const extractionInfoSchema = z.object({
   bytesFetched: z.number().int(),
   characters: z.number().int().describe("Length of the returned Markdown."),
   totalCharacters: z.number().int().describe("Length of the Markdown before truncation."),
-  words: z.number().int(),
+  words: z.number().int().describe("Word count of the returned Markdown."),
   warnings: z.array(z.string()),
   durationMs: z.number(),
 });
