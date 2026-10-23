@@ -13,7 +13,6 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm test && npm run build",
     "cf-typegen": "wrangler types",
-    "deploy:testnet": "wrangler deploy --env testnet",
     "deploy:production": "wrangler deploy --env production",
     "smoke:local": "node scripts/smoke-local.mjs",
     "smoke:testnet": "node scripts/testnet-smoke.mjs",

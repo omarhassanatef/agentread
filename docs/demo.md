@@ -58,18 +58,13 @@ npm run smoke:mcp                                    # lists tools, calls inspec
 EVM_PRIVATE_KEY=0x<testnet-only key> npm run smoke:mcp  # also pays for extract_url
 ```
 
-## Against the deployed testnet Worker
+## Against production
 
-✅ Deployed: `https://agentread-testnet.omar-cv.workers.dev` (receiver `0xDE20133E787A3cc64565b7AF1cF2bE3bEA3298Ea`; a payer wallet (unfunded) key is in `.secrets/testnet-wallets.json`, see the README).
-✅ `smoke:local` 9/9 against the deployment from GitHub Actions: `gh workflow run CI -f agentread_url=https://agentread-testnet.omar-cv.workers.dev`. It is not reachable from the development machine's network, where the `workers.dev` range is blocked.
-
-## Deploying your own testnet Worker
+✅ Deployed: `https://agentread.omar-cv.workers.dev` (Base mainnet, real USDC). Smoke checks pass from GitHub Actions:
 
 ```bash
-npm run deploy:testnet   # after setting env.testnet.vars.X402_PAY_TO in wrangler.jsonc
-export AGENTREAD_URL=https://agentread-testnet.<subdomain>.workers.dev
-npm run smoke:local && EVM_PRIVATE_KEY=0x… npm run smoke:testnet
-npx wrangler tail --env testnet   # watch payment.settled / extract.success events
+gh workflow run CI -f agentread_url=https://agentread.omar-cv.workers.dev
+npx wrangler tail --env production   # watch payment.settled / extract.success events
 ```
 
-The bundle is ~424 KiB gzip.
+The hosted testnet Worker was removed (Oct 2026). Testnet runs locally with `npm run dev`.

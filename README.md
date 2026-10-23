@@ -14,16 +14,16 @@ Prices are configuration, not code (see [Configuration](#configuration)).
 
 > **Status: MVP, live.**
 > - **Production (Base mainnet, real USDC):** https://agentread.omar-cv.workers.dev. Payments settle via the CDP facilitator to `0xb866dD8C8401438Efb29b538ec4df11b6b407Ce6`.
-> - **Testnet (Base Sepolia):** https://agentread-testnet.omar-cv.workers.dev
+> - **Testnet:** no hosted testnet. `npm run dev` runs locally against Base Sepolia and the free x402.org facilitator.
 >
 > What has been verified:
-> - **Automated tests:** all pass (218 tests, run inside the Workers runtime).
+> - **Automated tests:** all pass (233 tests, run inside the Workers runtime).
 > - **Local smoke test (9/9):** run against `wrangler dev` using the **live x402.org facilitator**. A genuinely signed payment from an unfunded wallet passes signature and requirement checks and is rejected for `insufficient_balance`, so the live wire path is proven up to the transfer itself.
-> - **Testnet deployment:** live at `https://agentread-testnet.omar-cv.workers.dev` and **passes the same 9/9 smoke checks from GitHub Actions** (CI `workflow_dispatch` job). The development network blocks the `workers.dev` IP range, hence the CI vantage point.
+> - **Production deployment:** passes all smoke checks from GitHub Actions (`gh workflow run CI`). The live CDP facilitator authenticates AgentRead and verifies signed payments. The development network blocks the `workers.dev` IP range, hence the CI vantage point.
 > - **Runs on the Workers Free plan.** The deployed `lite` engine had no CPU-limit kills in about 180 benchmark requests on Cloudflare's edge (Free account); the `readability` engine was killed in up to 84% of them. See [Extraction engines](#extraction-engines).
 > - **Not yet exercised on the deployed edge:** a *paid* extraction through the product Worker. The same extraction code was benchmarked on the edge, but no funded payment has gone through.
 >
-> **A funded live payment has not yet been made** (see [Testnet payment demo](#testnet-payment-demo)). Read [Limitations](#limitations) before relying on it.
+> **A funded payment has not yet been made** (see [Testnet payment demo](#testnet-payment-demo)). Read [Limitations](#limitations) before relying on it.
 
 ---
 
@@ -199,7 +199,7 @@ const client = new x402Client().register("eip155:84532", new ExactEvmScheme(toCl
 client.registerPolicy((_v, reqs) => reqs.filter((r) => BigInt(r.amount) <= 10_000n)); // never pay > $0.01
 
 const payFetch = wrapFetchWithPayment(fetch, client);
-const res = await payFetch("https://agentread-testnet.<subdomain>.workers.dev/v1/extract", {
+const res = await payFetch("http://localhost:8787/v1/extract", { // `npm run dev` (Base Sepolia)
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ url: "https://example.com/" }),
@@ -333,16 +333,6 @@ Prerequisites:
 - Workers AI enabled on the account (it is by default). HTML→Markdown conversion is documented as free; image descriptions, which are paid, are explicitly disabled.
 - `npx wrangler login`.
 
-### Testnet (`workers.dev`)
-
-```bash
-# 1. Set your Base Sepolia receiving address in wrangler.jsonc → env.testnet.vars.X402_PAY_TO
-# 2. Deploy
-npm run deploy:testnet          # → https://agentread-testnet.<your-subdomain>.workers.dev
-# 3. Verify
-AGENTREAD_URL=https://agentread-testnet.<your-subdomain>.workers.dev npm run smoke:local
-```
-
 ### Production (Base mainnet, real USDC)
 
 ```bash
@@ -364,16 +354,16 @@ Add the domain to your Cloudflare account, then add `"routes": [{ "pattern": "re
 
 ## Testnet payment demo
 
-A testnet deployment exists at `https://agentread-testnet.omar-cv.workers.dev`. Its receiving address `0xDE20133E787A3cc64565b7AF1cF2bE3bEA3298Ea` is a generated testnet wallet. A matching **payer** wallet `0x7816FC23017c86aa917AdbD44367312696421322` was generated too. Both private keys are in `.secrets/testnet-wallets.json`, which is gitignored and owner-only. **Testnet only: never send mainnet funds to these addresses.**
+Testnet runs locally with `npm run dev` (Base Sepolia, x402.org facilitator). Two testnet wallets were generated: the receiver `0xDE20133E787A3cc64565b7AF1cF2bE3bEA3298Ea` and a **payer** `0x7816FC23017c86aa917AdbD44367312696421322` was generated too. Both private keys are in `.secrets/testnet-wallets.json`, which is gitignored and owner-only. **Testnet only: never send mainnet funds to these addresses.**
 
 1. Fund the payer with Base Sepolia USDC at https://faucet.circle.com (choose Base Sepolia). No ETH is needed.
-2. Run the paid flow:
+2. Run the paid flow locally:
    ```bash
+   echo "X402_PAY_TO=0xDE20133E787A3cc64565b7AF1cF2bE3bEA3298Ea" > .dev.vars
+   npm run dev   # in one terminal
    export EVM_PRIVATE_KEY=$(node -p 'require("./.secrets/testnet-wallets.json").payer.privateKey')
-   AGENTREAD_URL=https://agentread-testnet.omar-cv.workers.dev npm run smoke:testnet
-   AGENTREAD_URL=https://agentread-testnet.omar-cv.workers.dev npm run smoke:mcp
+   npm run smoke:testnet && npm run smoke:mcp   # in another (AGENTREAD_URL defaults to localhost:8787)
    ```
-   If `workers.dev` is blocked on your network, use `npm run dev` locally (`.dev.vars` with `X402_PAY_TO`), which uses the same live facilitator.
 3. Check the transfers on https://sepolia.basescan.org/address/0xDE20133E787A3cc64565b7AF1cF2bE3bEA3298Ea
 
 ## Observability

@@ -8,7 +8,7 @@ on:
       agentread_url:
         description: "Deployed AgentRead base URL to smoke-test (unpaid checks only)"
         required: true
-        default: "https://agentread-testnet.omar-cv.workers.dev"
+        default: "https://agentread.omar-cv.workers.dev"
 
 jobs:
   check:

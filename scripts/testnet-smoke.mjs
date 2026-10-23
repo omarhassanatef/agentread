@@ -5,7 +5,8 @@
 //   - AgentRead running against Base Sepolia (local `npm run dev` or the testnet deployment)
 //   - EVM_PRIVATE_KEY: a TESTNET-ONLY wallet funded with Base Sepolia USDC (https://faucet.circle.com)
 //
-//   AGENTREAD_URL=https://agentread-testnet.<you>.workers.dev EVM_PRIVATE_KEY=0x... npm run smoke:testnet
+//   npm run dev   # then, in another terminal:
+//   EVM_PRIVATE_KEY=0x... npm run smoke:testnet
 import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { toClientEvmSigner } from "@x402/evm";
