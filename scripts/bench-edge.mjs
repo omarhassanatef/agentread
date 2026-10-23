@@ -16,6 +16,8 @@ const PAGES = (process.env.BENCH_PAGES ?? [
   "https://github.com/coinbase/x402",
   "https://news.ycombinator.com/",
   "https://en.wikipedia.org/wiki/Pacific_Ocean",
+  "https://developers.cloudflare.com/workers/runtime-apis/fetch/",
+  "https://www.bbc.com/news/science_and_environment",
 ].join(",")).split(",");
 
 const rows = [];

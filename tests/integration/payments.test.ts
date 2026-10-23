@@ -249,3 +249,33 @@ describe("x402 on HTTP — successful and failed paid requests", () => {
     expect(h.upstream.calls).toHaveLength(0);
   });
 });
+
+describe("x402 on HTTP — lite engine (EXTRACTION_ENGINE=lite)", () => {
+  const converter = async () => "---\ntitle: T\n---\n\n<!doctype html>\n\n## Converted heading\n\nConverted body text that is long enough to count as content.";
+
+  it("paid extraction uses the converter and settles", async () => {
+    const h = harness(routes, { EXTRACTION_ENGINE: "lite" }, undefined, converter);
+    const res = await wrapFetchWithPayment(h.appFetch, payingClient().client)("https://agentread.test/v1/extract", postJson({ url: PAGE }));
+    expect(res.status).toBe(200);
+    const r = extractResultSchema.parse(await res.json());
+    expect(r.extraction.method).toBe("lite");
+    expect(r.markdown).toBe("## Converted heading\n\nConverted body text that is long enough to count as content.");
+    expect(r.title).toBe("How Tide Pools Work | Ocean Notes"); // from <head>, not the converter
+    expect(h.facilitator.chain.settlements).toHaveLength(1);
+  });
+
+  it("converter outage → error, not charged", async () => {
+    const h = harness(routes, { EXTRACTION_ENGINE: "lite" }, undefined, async () => {
+      const { AppError } = await import("../../src/utils/errors.js");
+      throw new AppError("internal_error", "The Markdown conversion service is unavailable. Try again later.");
+    });
+    const res = await wrapFetchWithPayment(h.appFetch, payingClient().client)("https://agentread.test/v1/extract", postJson({ url: PAGE }));
+    expect(res.status).toBe(500);
+    expect(h.facilitator.chain.settlements).toHaveLength(0);
+  });
+
+  it("rejects an unknown engine name at config time", async () => {
+    const h = harness(routes, { EXTRACTION_ENGINE: "turbo" });
+    expect((await h.fetch("/health")).status).toBe(500);
+  });
+});

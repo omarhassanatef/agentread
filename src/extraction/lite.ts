@@ -4,32 +4,35 @@ import type { ContentOptions, ExtractedContent } from "./extract.js";
 import { detectJavaScriptSignals, normalizeWhitespace } from "./html.js";
 
 /**
- * "Lite" extraction engine for the Workers Free plan (10 ms CPU per request).
+ * "Lite" extraction engine, built for the Workers Free plan (10 ms CPU per request).
  *
- * The CPU-heavy work is delegated to native/remote code that does not count against
- * the Worker's CPU budget in the same way as JavaScript DOM building:
- *  1. HTMLRewriter (lol-html, native streaming parser) strips boilerplate, reads
- *     metadata and absolutises links in one pass, without building a DOM;
- *  2. a Markdown converter (Workers AI `toMarkdown`, free for HTML) turns the cleaned
- *     HTML into Markdown, restricted to the main content via a CSS selector.
- * Quality is lower than the Readability engine on pages without semantic markup.
+ * Measured on Cloudflare's edge (Oct 2026, real pages, CPU per request):
+ *   Readability (linkedom DOM)          p50 69 ms  p75 285 ms  → killed on Free
+ *   HTMLRewriter cleanup + toMarkdown    p50 25 ms  p75  37 ms  → over budget
+ *   page bytes → toMarkdown (this file)  p50  8 ms  p90  16 ms  → mostly within budget
+ *
+ * So this engine does almost no parsing in JavaScript: it picks a content-root CSS
+ * selector with indexOf(), hands the page to Workers AI `toMarkdown` (free for HTML;
+ * the conversion runs outside the Worker), reads metadata from the converter's front
+ * matter plus a few regexes over <head>, and removes known noise line by line.
+ * Quality is below the Readability engine on pages without a clear content root.
  */
 
-/** Converts cleaned HTML to Markdown. Production: Workers AI toMarkdown. Tests: injected fake. */
+/** Converts HTML to Markdown. Production: Workers AI toMarkdown. Tests: injected fake. */
 export type MarkdownConverter = (html: string, options: { cssSelector?: string; pageUrl: string }) => Promise<string>;
 
 export function workersAiConverter(ai: Ai): MarkdownConverter {
   return async (html, { cssSelector, pageUrl }) => {
-    let res: Awaited<ReturnType<Ai["toMarkdown"]>> extends infer R ? (R extends Array<infer X> ? X : R) : never;
+    let res;
     try {
       res = await ai.toMarkdown(
-        { name: "page.html", blob: new Blob([html], { type: "text/html" }) },
+        { name: "page.html", blob: new Blob([html], { type: "text/html; charset=utf-8" }) },
         {
           conversionOptions: {
             html: {
               hostname: new URL(pageUrl).origin,
               ...(cssSelector ? { cssSelector } : {}),
-              // Image descriptions use AI models (not free); never enable them here.
+              // Image descriptions run AI models (not free); never enable them here.
               images: { convert: false, convertOGImage: false },
             },
           },
@@ -45,213 +48,135 @@ export function workersAiConverter(ai: Ai): MarkdownConverter {
   };
 }
 
-/** Elements removed outright. lol-html supports type, attribute (=, ~=, ^=, $=, *=) and descendant selectors. */
-const REMOVE = [
-  "script",
-  "style",
-  "noscript",
-  "template",
-  "iframe",
-  "frame",
-  "object",
-  "embed",
-  "svg",
-  "canvas",
-  "link",
-  "button",
-  "input",
-  "select",
-  "textarea",
-  "form",
-  "dialog",
-  "nav",
-  "aside",
-  "footer",
-  "[hidden]",
-  '[aria-hidden="true"]',
-  '[role="navigation"]',
-  '[role="dialog"]',
-  '[role="alertdialog"]',
-  '[role="search"]',
-  '[role="complementary"]',
-  '[role="contentinfo"]',
-  // Exact class/id tokens (same intent as the Readability engine's BOILERPLATE_TOKEN).
-  ...[
-    "cookie",
-    "cookies",
-    "cookie-banner",
-    "cookie-consent",
-    "cookie-notice",
-    "consent",
-    "gdpr",
-    "modal",
-    "popup",
-    "overlay",
-    "newsletter",
-    "newsletter-signup",
-    "subscribe",
-    "ad",
-    "ads",
-    "advert",
-    "advertisement",
-    "ad-slot",
-    "adsbygoogle",
-    "sponsored",
-    "social-share",
-    "share-buttons",
-    "breadcrumb",
-    "breadcrumbs",
-    "skip-link",
-    "sr-only",
-    "visually-hidden",
-    "language-name",
-    "copy-button",
-    "mw-editsection",
-    "mw-jump-link",
-    "navbox",
-  ].flatMap((t) => [`[class~="${t}"]`, `[id="${t}"]`]),
-  // Vendor consent managers use prefixed ids/classes.
-  '[id^="onetrust"]',
-  '[class^="onetrust"]',
-  '[id^="CybotCookiebot"]',
-  '[id^="didomi"]',
-  '[class^="osano"]',
-  '[id^="sp_message"]',
-  '[style*="display:none"]',
-  '[style*="display: none"]',
+/**
+ * Content-root hints, most specific first. Each is detected with a plain substring
+ * search (no DOM, no regex over the whole page). Order matters: a page with a single
+ * <article> inside <main> is better served by the article.
+ */
+const ROOT_HINTS: Array<{ needle: string; selector: string }> = [
+  { needle: 'id="mw-content-text"', selector: "#mw-content-text" }, // MediaWiki / Wikipedia
+  { needle: 'class="markdown-body', selector: ".markdown-body" }, // GitHub READMEs and docs
+  { needle: 'class="vp-doc', selector: ".vp-doc" }, // VitePress docs
+  { needle: 'class="theme-doc-markdown', selector: ".theme-doc-markdown" }, // Docusaurus
 ];
 
-interface Collected {
-  title: string;
-  ogTitle: string | null;
-  description: string | null;
-  canonical: string | null;
-  lang: string | null;
-  siteName: string | null;
-  byline: string | null;
-  published: string | null;
-  base: string;
+export function chooseRootSelector(html: string): string | undefined {
+  for (const h of ROOT_HINTS) if (html.includes(h.needle)) return h.selector;
+  const lower = html.length > 600_000 ? html.slice(0, 600_000).toLowerCase() : html.toLowerCase();
+  const firstArticle = lower.indexOf("<article");
+  if (firstArticle !== -1 && lower.indexOf("<article", firstArticle + 8) === -1) return "article";
+  if (lower.includes("<main")) return "main";
+  if (lower.includes('role="main"') || lower.includes("role='main'")) return '[role="main"]';
+  return undefined; // whole document; the converter drops <head>, <header>, <footer>, scripts, styles
 }
 
-function absolute(raw: string | null, base: string): string | null {
+function headSection(html: string): string {
+  const end = html.search(/<\/head\s*>/i);
+  return html.slice(0, end === -1 ? Math.min(html.length, 65_536) : Math.min(end, 262_144));
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'");
+}
+
+function metaFromHead(head: string, name: string): string | null {
+  // Attribute order varies: <meta property="x" content="y"> or <meta content="y" property="x">.
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const a = new RegExp(`<meta[^>]+(?:property|name)\\s*=\\s*["']${esc}["'][^>]*content\\s*=\\s*["']([^"']*)["']`, "i").exec(head);
+  const b = a ?? new RegExp(`<meta[^>]+content\\s*=\\s*["']([^"']*)["'][^>]*(?:property|name)\\s*=\\s*["']${esc}["']`, "i").exec(head);
+  const v = normalizeWhitespace(decodeEntities(b?.[1] ?? ""));
+  return v || null;
+}
+
+function absolute(raw: string | null | undefined, base: string): string | null {
   if (!raw) return null;
   try {
-    const u = new URL(raw.trim(), base);
+    const u = new URL(decodeEntities(raw.trim()), base);
     return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
   } catch {
     return null;
   }
 }
 
-/** One streaming pass: metadata + boilerplate removal + link/image absolutisation. */
-async function rewrite(html: string, pageUrl: string): Promise<{ cleaned: string; meta: Collected }> {
-  const meta: Collected = {
-    title: "",
-    ogTitle: null,
-    description: null,
-    canonical: null,
-    lang: null,
-    siteName: null,
-    byline: null,
-    published: null,
-    base: pageUrl,
-  };
-  const metaMap: Record<string, (v: string) => void> = {
-    "og:title": (v) => (meta.ogTitle ??= v),
-    "twitter:title": (v) => (meta.ogTitle ??= v),
-    description: (v) => (meta.description ??= v),
-    "og:description": (v) => (meta.description ??= v),
-    "twitter:description": (v) => (meta.description ??= v),
-    "og:site_name": (v) => (meta.siteName ??= v),
-    "application-name": (v) => (meta.siteName ??= v),
-    author: (v) => (meta.byline ??= v),
-    "article:author": (v) => (meta.byline ??= v),
-    "article:published_time": (v) => (meta.published ??= v),
-    date: (v) => (meta.published ??= v),
-  };
-  let inTitle = false;
-
-  const rewriter = new HTMLRewriter()
-    .on("html", { element: (el) => void (meta.lang = el.getAttribute("lang")) })
-    .on("base[href]", { element: (el) => void (meta.base = absolute(el.getAttribute("href"), pageUrl) ?? pageUrl) })
-    .on("title", {
-      element: (el) => {
-        inTitle = true;
-        el.onEndTag(() => void (inTitle = false));
-      },
-      text: (t) => {
-        if (inTitle && meta.title.length < 1000) meta.title += t.text;
-      },
-    })
-    .on("meta", {
-      element: (el) => {
-        const key = (el.getAttribute("property") ?? el.getAttribute("name") ?? "").toLowerCase();
-        const content = normalizeWhitespace(el.getAttribute("content"));
-        if (content && metaMap[key]) metaMap[key](content);
-        if (el.getAttribute("charset") !== null || (el.getAttribute("http-equiv") ?? "").toLowerCase() === "content-type") el.remove();
-      },
-    })
-    .on('link[rel="canonical"]', { element: (el) => void (meta.canonical ??= absolute(el.getAttribute("href"), pageUrl)) })
-    .on(REMOVE.join(","), { element: (el) => void el.remove() })
-    .on("a[href]", {
-      element: (el) => {
-        const href = el.getAttribute("href") ?? "";
-        const abs = href.startsWith("#") ? null : absolute(href, meta.base);
-        if (abs) el.setAttribute("href", abs);
-        else el.removeAttribute("href");
-      },
-    })
-    .on("img", {
-      element: (el) => {
-        const abs = absolute(el.getAttribute("src") ?? el.getAttribute("data-src"), meta.base);
-        if (abs) el.setAttribute("src", abs);
-        else el.remove();
-      },
-    });
-
-  const cleaned = await rewriter.transform(new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } })).text();
-  return { cleaned, meta };
+/** Parse and remove the converter's YAML front matter (title/description/image). */
+function splitFrontMatter(md: string): { fm: Record<string, string>; body: string } {
+  const m = /^---\n([\s\S]*?)\n---\n*/.exec(md);
+  if (!m) return { fm: {}, body: md };
+  const fm: Record<string, string> = {};
+  for (const line of m[1]!.split("\n")) {
+    const kv = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
+    if (kv) fm[kv[1]!.toLowerCase()] = decodeEntities(kv[2]!.replace(/^["']|["']$/g, "").trim());
+  }
+  return { fm, body: md.slice(m[0].length) };
 }
 
-/** Pick the main-content container with cheap string checks on the cleaned HTML. */
-function mainSelector(cleaned: string): string | undefined {
-  if (/<main[\s>]/i.test(cleaned)) return "main";
-  if (/role\s*=\s*["']?main["'\s>]/i.test(cleaned)) return '[role="main"]';
-  const articles = cleaned.match(/<article[\s>]/gi)?.length ?? 0;
-  if (articles === 1) return "article";
-  return undefined; // whole body; toMarkdown drops <header>/<footer> itself
-}
+const NOISE_LINE = new RegExp(
+  "^(?:" +
+    [
+      "<!doctype[^>]*>", // leaked doctype
+      "<\\?>", // leaked processing instruction placeholder
+      "(?:[*-]\\s+)?\\[(?:skip|jump) to [^\\]]{1,40}\\]\\(#[^)]*\\)", // skip links
+      "toggle the table of contents",
+      "\\d+ languages", // Wikipedia language switcher label
+      "(?:http|https|js|javascript|ts|typescript|json|bash|sh|shell|html|css|python|go|rust|sql|text|plain)", // code-language labels
+    ].join("|") +
+    ")\\s*$",
+  "i",
+);
 
-/** Strip artefacts the converter adds that are not page content (front matter, JSON-LD dumps). */
-function tidy(md: string): string {
-  let out = md.replace(/\r\n?/g, "\n");
-  out = out.replace(/^---\n[\s\S]*?\n---\n+/, ""); // YAML front matter
-  out = out.replace(/\n```(?:json|ld\+json)?\n\s*\{[\s\S]*?"@context"[\s\S]*?```\s*$/i, ""); // appended JSON-LD
+/** Cheap, line-based cleanup of converter output. Linear in the Markdown size. */
+export function cleanMarkdown(md: string, pageUrl: string): string {
+  const lines = md.replace(/\r\n?/g, "\n").split("\n");
+  const out: string[] = [];
+  let inFence = false;
+  for (let line of lines) {
+    if (/^\s*```/.test(line)) inFence = !inFence;
+    if (!inFence) {
+      const t = line.trim();
+      if (NOISE_LINE.test(t)) continue;
+      // Anchor-only links (heading permalinks, TOC entries) → plain text.
+      line = line.replace(/\[([^\]]*)\]\(#[^)]*\)/g, "$1");
+      // Protocol-relative image/link URLs → absolute.
+      line = line.replace(/\]\(\/\/([^)\s]+)/g, (_m, rest: string) => `](${new URL(pageUrl).protocol}//${rest}`);
+    }
+    out.push(line);
+  }
   return out
+    .join("\n")
+    .replace(/\n```(?:json)?\n\s*\{[\s\S]*?"@context"[\s\S]*?```\s*$/i, "") // appended JSON-LD dump
     .replace(/[​-‍⁠﻿]/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-function stripLinks(md: string): string {
+export function stripLinks(md: string): string {
   return md
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]*)\]\((?:[^()]|\([^)]*\))*\)/g, "$1")
+    .replace(/\[([^\]]*)\]\((?:[^()\s]|\([^)]*\))*(?:\s+"[^"]*")?\)/g, "$1")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
+/** Upper bound on Markdown scanned for headings/links, to keep CPU bounded on huge pages. */
+const ANALYSIS_LIMIT = 200_000;
+
 function headingsAndLinks(md: string, opts: ContentOptions) {
+  const scan = md.length > ANALYSIS_LIMIT ? md.slice(0, ANALYSIS_LIMIT) : md;
   const headings: Heading[] = [];
   let headingsTruncated = false;
   let inFence = false;
-  for (const line of md.split("\n")) {
+  for (const line of scan.split("\n")) {
     if (/^\s*```/.test(line)) inFence = !inFence;
-    if (inFence) continue;
+    if (inFence || line.charCodeAt(0) !== 35 /* # */) continue;
     const m = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (!m) continue;
-    const text = normalizeWhitespace(m[2]!.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")).slice(0, 300);
+    const text = normalizeWhitespace(m[2]!.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`]/g, "")).slice(0, 300);
     if (!text) continue;
     if (headings.length >= opts.maxHeadings) {
       headingsTruncated = true;
@@ -262,7 +187,7 @@ function headingsAndLinks(md: string, opts: ContentOptions) {
   const links: Link[] = [];
   let linksTruncated = false;
   const seen = new Set<string>();
-  for (const m of md.matchAll(/(?<!!)\[([^\]]*)\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+  for (const m of scan.matchAll(/(?<!!)\[([^\]]*)\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)/g)) {
     const url = m[2]!;
     if (seen.has(url)) continue;
     if (links.length >= opts.maxLinks) {
@@ -270,41 +195,51 @@ function headingsAndLinks(md: string, opts: ContentOptions) {
       break;
     }
     seen.add(url);
-    links.push({ text: normalizeWhitespace(m[1]).slice(0, 300), url });
+    links.push({ text: normalizeWhitespace(m[1]!.replace(/[*_`]/g, "")).slice(0, 300), url });
   }
   return { headings, headingsTruncated, links, linksTruncated };
 }
 
 export async function extractLite(html: string, pageUrl: string, opts: ContentOptions, convert: MarkdownConverter): Promise<ExtractedContent> {
   const js = detectJavaScriptSignals(html);
-  const { cleaned, meta } = await rewrite(html, pageUrl);
-  const cssSelector = mainSelector(cleaned);
-  let markdown = tidy(await convert(cleaned, { pageUrl, ...(cssSelector ? { cssSelector } : {}) }));
-  // A selector that matched nothing useful: retry on the whole document.
-  if (cssSelector && markdown.length < 40) markdown = tidy(await convert(cleaned, { pageUrl }));
-  // The converter may prepend the <title> as an H1; drop it so content starts with the page body.
-  const title = normalizeWhitespace(meta.title) || null;
-  if (title) markdown = markdown.replace(new RegExp(`^#\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n+`), "");
+  const head = headSection(html);
+  const cssSelector = chooseRootSelector(html);
+
+  let raw = await convert(html, { pageUrl, ...(cssSelector ? { cssSelector } : {}) });
+  let { fm, body } = splitFrontMatter(raw);
+  let markdown = cleanMarkdown(body, pageUrl);
+  if (cssSelector && markdown.length < 40) {
+    // The selector matched nothing useful: convert the whole document instead.
+    raw = await convert(html, { pageUrl });
+    ({ fm, body } = splitFrontMatter(raw));
+    markdown = cleanMarkdown(body, pageUrl);
+  }
+
+  const titleTag = /<title[^>]*>([\s\S]{0,1000}?)<\/title>/i.exec(head)?.[1];
+  // The page's own <head> is authoritative; the converter's front matter is a fallback.
+  const title = metaFromHead(head, "og:title") ?? (normalizeWhitespace(decodeEntities(titleTag ?? "")) || normalizeWhitespace(fm.title) || null);
+  const description = metaFromHead(head, "description") ?? metaFromHead(head, "og:description") ?? (normalizeWhitespace(fm.description) || null);
+  const canonicalTag = /<link[^>]+rel\s*=\s*["']canonical["'][^>]*>/i.exec(head)?.[0];
+  const lang = normalizeWhitespace(/<html[^>]*\blang\s*=\s*["']?([a-zA-Z0-9_-]+)/i.exec(html.slice(0, 4096))?.[1]);
+
+  const metadata: PageMetadata = {
+    title: title?.slice(0, 500) ?? null,
+    description: description?.slice(0, 1000) ?? null,
+    canonicalUrl: absolute(canonicalTag ? /href\s*=\s*["']([^"']+)["']/i.exec(canonicalTag)?.[1] : null, pageUrl),
+    language: lang && /^[a-zA-Z]{2,3}([-_][a-zA-Z0-9]{2,8})*$/.test(lang) ? lang : null,
+    siteName: metaFromHead(head, "og:site_name") ?? metaFromHead(head, "application-name"),
+    byline: metaFromHead(head, "author") ?? metaFromHead(head, "article:author"),
+    publishedTime: metaFromHead(head, "article:published_time") ?? metaFromHead(head, "date"),
+  };
 
   const links = headingsAndLinks(markdown, opts);
   if (!opts.includeLinks) markdown = stripLinks(markdown);
-  const lang = normalizeWhitespace(meta.lang);
-  const metadata: PageMetadata = {
-    title: (meta.ogTitle ?? title)?.slice(0, 500) ?? null,
-    description: meta.description?.slice(0, 1000) ?? null,
-    canonicalUrl: meta.canonical,
-    language: lang && /^[a-zA-Z]{2,3}([-_][a-zA-Z0-9]{2,8})*$/.test(lang) ? lang : null,
-    siteName: meta.siteName,
-    byline: meta.byline,
-    publishedTime: meta.published,
-  };
-  const plain = stripLinks(markdown).replace(/[#*_>`|~-]/g, " ");
   return {
     method: "lite",
     metadata,
     markdown,
     ...links,
-    textLength: normalizeWhitespace(plain).length,
+    textLength: normalizeWhitespace(stripLinks(markdown.length > ANALYSIS_LIMIT ? markdown.slice(0, ANALYSIS_LIMIT) : markdown)).length,
     mayRequireJavaScript: js.mayRequireJavaScript,
   };
 }
