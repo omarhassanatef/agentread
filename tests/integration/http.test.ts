@@ -64,6 +64,9 @@ describe("service endpoints", () => {
     expect(icon.headers.get("content-type")).toBe("image/png");
     expect(new Uint8Array(await icon.arrayBuffer()).slice(1, 4)).toEqual(new Uint8Array([0x50, 0x4e, 0x47])); // "PNG"
 
+    const glama = (await (await h.fetch("/.well-known/glama.json")).json()) as { maintainers: Array<{ email: string }> };
+    expect(glama.maintainers[0]!.email).toBe("omarhatef@hotmail.com");
+
     const llms = await h.fetch("/llms.txt");
     expect(llms.headers.get("content-type")).toContain("text/plain");
     const text = await llms.text();

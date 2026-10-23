@@ -125,6 +125,10 @@ export function createApp(deps: AppDeps = {}) {
       instructions: "POST JSON {\"url\": \"https://…\"}. Unpaid requests receive an x402 v2 challenge (PAYMENT-REQUIRED header). Free inspection: POST /v1/inspect. MCP: /mcp.",
     });
   });
+  // Glama connector ownership claim (https://glama.ai/mcp/connectors): maintainer email must match the Glama account.
+  app.get("/.well-known/glama.json", (c) =>
+    c.json({ $schema: "https://glama.ai/mcp/schemas/connector.json", maintainers: [{ email: "omarhatef@hotmail.com" }] }),
+  );
   app.get("/llms.txt", (c) => c.text(llmsTxt(c.get("cfg"), new URL(c.req.url).origin)));
   const icon = Uint8Array.from(atob(ICON_PNG_BASE64), (ch) => ch.charCodeAt(0));
   for (const path of ["/favicon.png", "/icon.png"]) {
