@@ -14,6 +14,9 @@ for (const path of ["/v1/extract", "/v1/extract/structured"]) {
   const ok = body.valid === true && body.simulation?.outcome === "accepted";
   if (!ok) failed++;
   console.log(`${ok ? "PASS" : "FAIL"}  Bazaar validation ${path}  — HTTP ${res.status} valid=${body.valid} outcome=${body.simulation?.outcome}`);
-  console.log(JSON.stringify(body, null, 2).slice(0, 4000));
+  const notPassed = (body.preflight ?? []).filter((c) => !c.passed);
+  for (const c of notPassed) console.log(`      ${c.severity === "required" ? "REQUIRED" : "advisory"}  ${c.check}: ${c.detail}`);
+  if (!notPassed.length) console.log("      all preflight checks passed");
+  console.log(`      index: ${JSON.stringify(body.index)}`);
 }
 process.exit(failed ? 1 : 0);
