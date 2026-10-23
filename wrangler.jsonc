@@ -57,8 +57,8 @@
         "ENVIRONMENT": "production",
         "X402_NETWORK": "eip155:8453",
         "X402_FACILITATOR_URL": "https://api.cdp.coinbase.com/platform/v2/x402",
-        // Public receiving address (not a secret). Replace before deploying.
-        "X402_PAY_TO": "0x0000000000000000000000000000000000000000",
+        // Public mainnet receiving address (owner's Trust Wallet, USDC on Base). Not a secret.
+        "X402_PAY_TO": "0xb866dD8C8401438Efb29b538ec4df11b6b407Ce6",
         "PRICE_EXTRACT_USD": "0.003",
         "PRICE_EXTRACT_STRUCTURED_USD": "0.005",
         "DNS_CHECK": "doh",
