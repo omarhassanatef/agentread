@@ -2,6 +2,8 @@ import type { FacilitatorClient } from "@x402/core/server";
 import { loadConfig, type AppConfig, type Bindings } from "../config/env.js";
 import type { Services } from "../extraction/operations.js";
 import { createDohHostGuard, noopHostGuard, type Fetcher, type HostGuard } from "../security/dns.js";
+import { workersAiConverter, type MarkdownConverter } from "../extraction/lite.js";
+import { logError } from "../utils/log.js";
 import { createFacilitatorClient } from "../payments/x402.js";
 import { AppError } from "../utils/errors.js";
 
@@ -13,6 +15,8 @@ export interface AppDeps {
   hostGuard?: HostGuard;
   /** Overrides the x402 facilitator (default: HTTP facilitator from config). */
   facilitator?: FacilitatorClient;
+  /** Overrides the lite engine's Markdown converter (default: Workers AI toMarkdown). */
+  markdownConverter?: MarkdownConverter;
 }
 
 const configCache = new WeakMap<object, AppConfig>();
@@ -40,10 +44,16 @@ function memoizeGuard(guard: HostGuard): HostGuard {
 }
 
 /** Per-request services. Built per request because Workers I/O cannot be shared across requests. */
-export function createServices(cfg: AppConfig, deps: AppDeps): Services {
+export function createServices(cfg: AppConfig, deps: AppDeps, env: Bindings = {}): Services {
   const fetcher: Fetcher = deps.fetcher ?? ((input, init) => fetch(input, init));
   const guard = deps.hostGuard ?? (cfg.dnsCheck === "doh" ? createDohHostGuard(fetcher, cfg.dohUrl) : noopHostGuard);
-  return { fetcher, hostGuard: memoizeGuard(guard), limits: cfg.limits };
+  const svc: Services = { fetcher, hostGuard: memoizeGuard(guard), limits: cfg.limits };
+  if (cfg.engine === "lite") {
+    const converter = deps.markdownConverter ?? (env.AI ? workersAiConverter(env.AI) : undefined);
+    if (converter) svc.markdownConverter = converter;
+    else logError("config.lite_engine_without_ai", { fallback: "readability" });
+  }
+  return svc;
 }
 
 export function getFacilitator(cfg: AppConfig, deps: AppDeps): FacilitatorClient {

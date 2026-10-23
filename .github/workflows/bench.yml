@@ -1,0 +1,29 @@
+name: Edge benchmark
+
+# Manual only. Drives the temporary agentread-bench Worker (src/bench.ts) from GitHub's
+# network to compare extraction engines on Cloudflare's edge (CPU limits apply there).
+on:
+  workflow_dispatch:
+    inputs:
+      bench_url:
+        description: "Bench Worker URL"
+        required: true
+        default: "https://agentread-bench.omar-cv.workers.dev"
+      repeat:
+        description: "Requests per page per engine"
+        required: true
+        default: "3"
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/bench-edge.mjs
+        env:
+          BENCH_URL: ${{ inputs.bench_url }}
+          BENCH_TOKEN: ${{ secrets.BENCH_TOKEN }}
+          BENCH_REPEAT: ${{ inputs.repeat }}

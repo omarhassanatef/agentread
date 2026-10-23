@@ -15,6 +15,8 @@ export interface Bindings {
   CDP_API_KEY_ID?: string;
   CDP_API_KEY_SECRET?: string;
   DNS_CHECK?: string;
+  EXTRACTION_ENGINE?: string;
+  AI?: Ai;
   DOH_URL?: string;
   FETCH_TIMEOUT_MS?: string;
   MAX_RESPONSE_BYTES?: string;
@@ -86,6 +88,8 @@ export interface AppConfig {
   environment: "development" | "testnet" | "production" | "test";
   limits: Limits;
   dnsCheck: "doh" | "off";
+  /** "lite" = HTMLRewriter + Workers AI toMarkdown (fits the Free plan's CPU limit); "readability" = linkedom + Readability. */
+  engine: "lite" | "readability";
   dohUrl: string;
   /** null when payments are misconfigured; `paymentConfigError` explains why. */
   payment: PaymentConfig | null;
@@ -190,10 +194,13 @@ export function loadConfig(env: Bindings): AppConfig {
   }
 
   const dnsCheck = (env.DNS_CHECK ?? "doh").trim() === "off" ? "off" : "doh";
+  const rawEngine = (env.EXTRACTION_ENGINE ?? "readability").trim();
+  if (rawEngine !== "lite" && rawEngine !== "readability") throw new Error(`EXTRACTION_ENGINE "${rawEngine}" must be "lite" or "readability"`);
   return {
     environment,
     limits: loadLimits(env),
     dnsCheck,
+    engine: rawEngine,
     dohUrl: env.DOH_URL?.trim() || "https://cloudflare-dns.com/dns-query",
     payment,
     paymentConfigError,

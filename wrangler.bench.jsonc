@@ -1,0 +1,14 @@
+{
+  // TEMPORARY benchmark Worker (see src/bench.ts). Not part of the product.
+  // Deploy:  npx wrangler deploy -c wrangler.bench.jsonc && npx wrangler secret put BENCH_TOKEN -c wrangler.bench.jsonc
+  // Remove:  npx wrangler delete -c wrangler.bench.jsonc
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agentread-bench",
+  "main": "src/bench.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "ai": { "binding": "AI" },
+  "vars": { "ENVIRONMENT": "development", "DNS_CHECK": "doh" }
+}

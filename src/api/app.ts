@@ -68,7 +68,7 @@ export function createApp(deps: AppDeps = {}) {
       return c.json(errorBody(new AppError("internal_error", "Service is misconfigured.")), 500);
     }
     c.set("cfg", cfg);
-    c.set("svc", createServices(cfg, deps));
+    c.set("svc", createServices(cfg, deps, c.env ?? {}));
     await next();
     c.header("x-content-type-options", "nosniff");
     logEvent("http.request", {

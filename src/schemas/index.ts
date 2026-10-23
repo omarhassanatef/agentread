@@ -44,7 +44,7 @@ export type ExtractInput = z.infer<ReturnType<typeof extractInputSchema>>;
 export const headingSchema = z.object({ level: z.number().int().min(1).max(6), text: z.string() });
 export const linkSchema = z.object({ text: z.string(), url: z.string() });
 
-export const extractionMethodSchema = z.enum(["readability", "main-content-fallback", "body-fallback", "plain-text"]);
+export const extractionMethodSchema = z.enum(["readability", "main-content-fallback", "body-fallback", "plain-text", "lite"]);
 
 export const extractionInfoSchema = z.object({
   method: extractionMethodSchema,

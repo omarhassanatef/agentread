@@ -12,6 +12,7 @@ import {
 } from "../schemas/index.js";
 import { AppError } from "../utils/errors.js";
 import { extractFromHtml, extractFromText, type ExtractedContent } from "./extract.js";
+import { extractLite, type MarkdownConverter } from "./lite.js";
 import { decodeBody, safeFetch, type FetchedDocument } from "./fetch.js";
 import { detectJavaScriptSignals, sniffTitle } from "./html.js";
 import { countWords, truncateMarkdown } from "./markdown.js";
@@ -21,6 +22,8 @@ export interface Services {
   fetcher: Fetcher;
   hostGuard: HostGuard;
   limits: Limits;
+  /** Set when the lite engine is active (see extraction/lite.ts); otherwise Readability is used. */
+  markdownConverter?: MarkdownConverter;
 }
 
 const HTML_TYPES = new Set(["text/html", "application/xhtml+xml"]);
@@ -144,7 +147,12 @@ async function fetchAndExtract(input: ExtractInput, svc: Services, target?: Vali
   if (fallback) warnings.push(`charset_unsupported_decoded_as_utf8`);
 
   const opts = { includeLinks: input.includeLinks ?? true, maxLinks: svc.limits.maxLinks, maxHeadings: svc.limits.maxHeadings };
-  const content = kind === "html" ? extractFromHtml(text, doc.finalUrl, opts) : extractFromText(text, kind === "markdown", opts);
+  const content =
+    kind !== "html"
+      ? extractFromText(text, kind === "markdown", opts)
+      : svc.markdownConverter
+        ? await extractLite(text, doc.finalUrl, opts, svc.markdownConverter)
+        : extractFromHtml(text, doc.finalUrl, opts);
 
   if (content.textLength < 40 || content.markdown.length === 0) {
     if (content.mayRequireJavaScript) {

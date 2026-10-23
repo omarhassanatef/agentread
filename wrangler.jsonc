@@ -9,6 +9,8 @@
   "workers_dev": true,
   "upload_source_maps": true,
   "observability": { "enabled": true, "head_sampling_rate": 1 },
+  // Workers AI binding: used only for its free HTML→Markdown conversion (EXTRACTION_ENGINE=lite).
+  "ai": { "binding": "AI" },
 
   // Top-level config = local development (`wrangler dev`). Always testnet.
   // X402_PAY_TO for local dev goes in .dev.vars (see .dev.vars.example).
