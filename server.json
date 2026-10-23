@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.omarhassanatef/agentread",
   "title": "AgentRead",
-  "description": "Clean web content for AI agents: public URL to Markdown, metadata, headings and links. Pay-per-call via x402 (USDC on Base).",
+  "description": "Web pages to clean Markdown for AI agents. Free URL inspect; paid extraction via x402 USDC on Base.",
   "version": "0.1.0",
   "websiteUrl": "https://agentread.omar-cv.workers.dev/",
   "remotes": [
