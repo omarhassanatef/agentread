@@ -36,7 +36,7 @@ export interface Bindings {
 }
 
 export const SERVICE_NAME = "AgentRead";
-export const SERVICE_VERSION = "0.1.0";
+export const SERVICE_VERSION = "0.2.0";
 
 /** Networks this service knows how to price. Verified against docs.x402.org (Oct 2026). */
 export const SUPPORTED_NETWORKS = {
