@@ -3,6 +3,7 @@ import { loadConfig, type AppConfig, type Bindings } from "../config/env.js";
 import type { Services } from "../extraction/operations.js";
 import { createDohHostGuard, noopHostGuard, type Fetcher, type HostGuard } from "../security/dns.js";
 import { workersAiConverter, type MarkdownConverter } from "../extraction/lite.js";
+import { durableFreeTier, type FreeTier } from "../payments/free-tier.js";
 import { logError } from "../utils/log.js";
 import { createFacilitatorClient } from "../payments/x402.js";
 import { AppError } from "../utils/errors.js";
@@ -17,6 +18,8 @@ export interface AppDeps {
   facilitator?: FacilitatorClient;
   /** Overrides the lite engine's Markdown converter (default: Workers AI toMarkdown). */
   markdownConverter?: MarkdownConverter;
+  /** Overrides the free daily allowance (default: FREE_QUOTA Durable Object; absent → no free tier). */
+  freeTier?: FreeTier | null;
 }
 
 const configCache = new WeakMap<object, AppConfig>();
@@ -79,4 +82,16 @@ export async function checkRateLimit(limiter: RateLimit | undefined, key: string
 
 export function clientKey(req: Request): string {
   return req.headers.get("cf-connecting-ip") ?? "unknown";
+}
+
+/** Free daily allowance for paid operations, or null when disabled / not bound. */
+export function getFreeTier(cfg: AppConfig, deps: AppDeps, env: Bindings): FreeTier | null {
+  if (deps.freeTier !== undefined) return deps.freeTier;
+  if (!env.FREE_QUOTA || cfg.freeTier.perClient <= 0) return null;
+  return durableFreeTier(env.FREE_QUOTA, cfg.freeTier.perClient, cfg.freeTier.global);
+}
+
+/** True when the request carries an x402 payment (such requests never use the free allowance). */
+export function hasPaymentHeader(req: Request): boolean {
+  return req.headers.has("payment-signature") || req.headers.has("x-payment");
 }

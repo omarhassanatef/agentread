@@ -16,6 +16,10 @@ export function llmsTxt(cfg: AppConfig, origin: string): string {
 - [extract_url](${origin}/openapi.json): POST ${origin}/v1/extract {"url": "...", "maxCharacters"?: number, "includeLinks"?: boolean}. ${price("extract_url")}. Clean Markdown, title, description, headings.
 - [extract_url_structured](${origin}/openapi.json): POST ${origin}/v1/extract/structured, same input. ${price("extract_url_structured")}. Metadata (canonical URL, language, site name, byline, published time), Markdown, headings, links.
 
+## Free allowance
+
+- The first ${cfg.freeTier.perClient} successful extractions per day per client are free: just call without payment. Only successful extractions count. Remaining calls are reported in the \`x-free-tier-remaining\` header (MCP: \`_meta["agentread/free-tier"]\`).
+
 ## Paying
 
 - Unpaid paid-endpoint requests return HTTP 402 with an x402 v2 \`PAYMENT-REQUIRED\` header. Retry with a \`PAYMENT-SIGNATURE\` header from an x402 client such as @x402/fetch.

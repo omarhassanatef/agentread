@@ -151,3 +151,19 @@ describe("MCP server — tools", () => {
     expect(h.facilitator.chain.settlements).toHaveLength(0);
   });
 });
+
+describe("MCP free daily allowance", () => {
+  it("paid tools are served free without payment metadata while the allowance lasts", async () => {
+    const { memoryFreeTier } = await import("../../src/payments/free-tier.js");
+    const h = harness({ [PAGE]: html(ARTICLE_HTML) }, {}, undefined, undefined, memoryFreeTier(1));
+    const client = await connect(h);
+    const first = await client.callTool({ name: "extract_url", arguments: { url: PAGE } });
+    expect(first.isError).toBeFalsy();
+    expect(extractResultSchema.parse(first.structuredContent).markdown).toContain("Tide pools are shallow basins");
+    expect(first._meta).toMatchObject({ "agentread/free-tier": { limit: 1, remaining: 0 } });
+    const second = await client.callTool({ name: "extract_url", arguments: { url: PAGE } });
+    expect(second.isError).toBe(true);
+    expect((second.structuredContent as { x402Version: number }).x402Version).toBe(2);
+    expect(h.facilitator.chain.settlements).toHaveLength(0);
+  });
+});

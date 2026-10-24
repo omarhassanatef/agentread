@@ -92,7 +92,7 @@ export function openApiDocument(cfg: AppConfig, origin: string) {
         "Use AgentRead to read a public web page as clean Markdown instead of raw HTML. Call POST /v1/inspect (free) first to check the URL is " +
         "reachable and extractable. Then call POST /v1/extract for Markdown, or POST /v1/extract/structured when you also need metadata, " +
         "headings and links separately. Bodies are JSON: {\"url\": \"https://…\", \"maxCharacters\"?: number, \"includeLinks\"?: boolean}. " +
-        "Paid calls follow x402 v2: an unpaid call returns 402 with a PAYMENT-REQUIRED header; retry with PAYMENT-SIGNATURE. Failed " +
+        "The first few successful extractions per day per client are free (see x-free-tier-remaining). After that, paid calls follow x402 v2: an unpaid call returns 402 with a PAYMENT-REQUIRED header; retry with PAYMENT-SIGNATURE. Failed " +
         "extractions (4xx/5xx) are not charged. JavaScript is not executed; pages that need it return javascript_required.",
     },
     servers: [{ url: origin }],

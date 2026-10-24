@@ -7,6 +7,7 @@ import type { FacilitatorClient } from "@x402/core/server";
 import { SERVICE_NAME, SERVICE_VERSION, type AppConfig } from "../config/env.js";
 import { extractUrl, extractUrlStructured, inspectUrl, prevalidateUrl, type Services } from "../extraction/operations.js";
 import { createResourceServer, priceFor, type PaidOperation } from "../payments/x402.js";
+import type { FreeTier } from "../payments/free-tier.js";
 import { DISCOVERY_TAGS, mcpDiscovery } from "../payments/discovery.js";
 import { extractInputShape, inspectInputShape, inspectResultSchema, type ExtractInput } from "../schemas/index.js";
 import { AppError, errorBody, toAppError } from "../utils/errors.js";
@@ -21,6 +22,8 @@ export interface McpContext {
   inspectLimiter?: RateLimit;
   paidLimiter?: RateLimit;
   clientKey: string;
+  /** Free daily allowance for paid tools (null/absent → every call needs payment). */
+  freeTier?: FreeTier | null;
 }
 
 /** Text-only tool result: the shape both the MCP SDK and @x402/mcp accept. */
@@ -99,7 +102,7 @@ export function buildMcpServer(ctx: McpContext): McpServer {
       op,
       {
         title: docs.title,
-        description: `${docs.description} (${price} per successful call). ${docs.output}`,
+        description: `${docs.description} (${price} per successful call${cfg.freeTier.perClient > 0 ? `; the first ${cfg.freeTier.perClient} successful calls per day are free` : ""}). ${docs.output}`,
         inputSchema: extractInputShape(cfg.limits),
         annotations: { readOnlyHint: true, openWorldHint: true },
       },
@@ -113,6 +116,26 @@ export function buildMcpServer(ctx: McpContext): McpServer {
         } catch (err) {
           return fail(err);
         }
+        const run = op === "extract_url" ? extractUrl : extractUrlStructured;
+
+        // Free daily allowance: calls without x402 payment metadata are served free while it lasts.
+        const meta = (extra as { _meta?: Record<string, unknown> })._meta;
+        if (!meta?.["x402/payment"] && ctx.freeTier) {
+          const grant = await ctx.freeTier.reserve(ctx.clientKey);
+          if (grant) {
+            try {
+              const result = await run(args, svc, target);
+              logEvent("mcp.extract.success", { tool: op, host: target.hostname, method: result.extraction.method, free: true });
+              return { ...ok(result), _meta: { "agentread/free-tier": { limit: grant.limit, remaining: grant.remaining } } };
+            } catch (err) {
+              await grant.release();
+              const e = toAppError(err);
+              logEvent("mcp.extract.failure", { tool: op, host: target.hostname, code: e.code, free: true });
+              return fail(e);
+            }
+          }
+        }
+
         const payment = cfg.payment;
         let paid;
         try {
@@ -134,7 +157,6 @@ export function buildMcpServer(ctx: McpContext): McpServer {
           return fail(new AppError("payments_unavailable", "The payment facilitator is unavailable. Try again later."));
         }
 
-        const run = op === "extract_url" ? extractUrl : extractUrlStructured;
         const handler = paid(async (a: ExtractInput) => {
           try {
             const result = await run(a, svc, target);

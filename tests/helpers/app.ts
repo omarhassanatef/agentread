@@ -6,6 +6,7 @@ import { createApp } from "../../src/api/app.js";
 import type { Bindings } from "../../src/config/env.js";
 import type { HostGuard } from "../../src/security/dns.js";
 import type { MarkdownConverter } from "../../src/extraction/lite.js";
+import type { FreeTier } from "../../src/payments/free-tier.js";
 import { LocalFacilitator } from "./facilitator.js";
 import { mockUpstream, type UpstreamRoute } from "./upstream.js";
 
@@ -37,10 +38,11 @@ export function harness(
   envOverrides: Partial<Bindings> = {},
   hostGuard?: HostGuard,
   markdownConverter?: MarkdownConverter,
+  freeTier?: FreeTier | null,
 ): Harness {
   const upstream = mockUpstream(routes);
   const facilitator = new LocalFacilitator();
-  const app = createApp({ fetcher: upstream.fetcher, hostGuard: hostGuard ?? (async () => {}), facilitator, ...(markdownConverter ? { markdownConverter } : {}) });
+  const app = createApp({ fetcher: upstream.fetcher, hostGuard: hostGuard ?? (async () => {}), facilitator, ...(markdownConverter ? { markdownConverter } : {}), freeTier: freeTier ?? null });
   // A fresh env object per harness → fresh config cache entry.
   const env: Bindings = { ...TEST_ENV, ...envOverrides };
   const appFetch = (async (input: RequestInfo | URL, init?: RequestInit) =>

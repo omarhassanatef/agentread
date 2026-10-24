@@ -33,7 +33,8 @@ const inspect = await post("/v1/inspect", { url: TARGET });
 const i = await inspect.json();
 check("POST /v1/inspect (free)", inspect.status === 200 && i.reachable === true, `status=${i.statusCode} title=${JSON.stringify(i.title)} supported=${i.extractionSupported}`);
 
-const unpaid = await post("/v1/extract", { url: TARGET });
+// Empty-body discovery probe: always answered with the x402 challenge (never served free).
+const unpaid = await post("/v1/extract", {});
 const header = unpaid.headers.get("payment-required");
 let req;
 try {
@@ -42,7 +43,15 @@ try {
   req = null;
 }
 const a = req?.accepts?.[0];
-check("POST /v1/extract unpaid → 402", unpaid.status === 402 && !!a, a ? `${a.amount} of ${a.asset} on ${a.network} → ${a.payTo}` : `status=${unpaid.status}`);
+check("POST /v1/extract probe → 402", unpaid.status === 402 && !!a, a ? `${a.amount} of ${a.asset} on ${a.network} → ${a.payTo}` : `status=${unpaid.status}`);
+
+// A real unpaid request is served from the free daily allowance, or gets 402 once it is used up.
+const freeRes = await post("/v1/extract", { url: TARGET });
+check(
+  "POST /v1/extract unpaid → free allowance (200) or 402",
+  freeRes.status === 200 ? freeRes.headers.has("x-free-tier-remaining") : freeRes.status === 402,
+  `status=${freeRes.status} remaining=${freeRes.headers.get("x-free-tier-remaining")}`,
+);
 
 const bad = await post("/v1/extract", { url: "http://169.254.169.254/latest/meta-data/" });
 check("SSRF target rejected before payment (400)", bad.status === 400 && !bad.headers.get("payment-required"));
@@ -71,7 +80,11 @@ check("MCP tools/list", tools.length === 3, tools.map((t) => t.name).join(", "))
 const mi = await mcp.callTool({ name: "inspect_url", arguments: { url: TARGET } });
 check("MCP inspect_url", !mi.isError && mi.structuredContent?.reachable === true);
 const mp = await mcp.callTool({ name: "extract_url", arguments: { url: TARGET } });
-check("MCP extract_url unpaid → PaymentRequired", mp.isError === true && mp.structuredContent?.x402Version === 2);
+check(
+  "MCP extract_url unpaid → free result or PaymentRequired",
+  (!mp.isError && !!mp._meta?.["agentread/free-tier"]) || (mp.isError === true && mp.structuredContent?.x402Version === 2),
+  mp.isError ? "payment required" : `free, remaining=${mp._meta?.["agentread/free-tier"]?.remaining}`,
+);
 await mcp.close();
 
 console.log(failed ? `\n${failed} check(s) failed` : "\nAll checks passed");

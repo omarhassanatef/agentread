@@ -17,6 +17,9 @@ export interface Bindings {
   DNS_CHECK?: string;
   EXTRACTION_ENGINE?: string;
   AI?: Ai;
+  FREE_CALLS_PER_DAY?: string;
+  FREE_CALLS_GLOBAL_PER_DAY?: string;
+  FREE_QUOTA?: DurableObjectNamespace<import("../payments/free-tier.js").FreeQuota>;
   DOH_URL?: string;
   FETCH_TIMEOUT_MS?: string;
   MAX_RESPONSE_BYTES?: string;
@@ -90,6 +93,8 @@ export interface AppConfig {
   dnsCheck: "doh" | "off";
   /** "lite" = HTMLRewriter + Workers AI toMarkdown (fits the Free plan's CPU limit); "readability" = linkedom + Readability. */
   engine: "lite" | "readability";
+  /** Free successful paid-operation calls per client per UTC day, and the global daily cap (0 disables). */
+  freeTier: { perClient: number; global: number };
   dohUrl: string;
   /** null when payments are misconfigured; `paymentConfigError` explains why. */
   payment: PaymentConfig | null;
@@ -201,6 +206,10 @@ export function loadConfig(env: Bindings): AppConfig {
     limits: loadLimits(env),
     dnsCheck,
     engine: rawEngine,
+    freeTier: {
+      perClient: intVar(env.FREE_CALLS_PER_DAY, 5, 0, 1000),
+      global: intVar(env.FREE_CALLS_GLOBAL_PER_DAY, 1000, 0, 100_000),
+    },
     dohUrl: env.DOH_URL?.trim() || "https://cloudflare-dns.com/dns-query",
     payment,
     paymentConfigError,

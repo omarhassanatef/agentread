@@ -16,7 +16,8 @@ import { extractInputSchema, inspectInputSchema, type ExtractInput, type Inspect
 import type { ValidatedUrl } from "../security/url.js";
 import { AppError, errorBody, toAppError } from "../utils/errors.js";
 import { logError, logEvent } from "../utils/log.js";
-import { checkRateLimit, clientKey, createServices, getConfig, getFacilitator, paymentsUnavailable, type AppDeps } from "./context.js";
+import { checkRateLimit, clientKey, createServices, getConfig, getFacilitator, getFreeTier, hasPaymentHeader, paymentsUnavailable, type AppDeps } from "./context.js";
+import type { FreeGrant } from "../payments/free-tier.js";
 import { discoveryDocument } from "./discovery.js";
 import { openApiDocument } from "./openapi.js";
 import { llmsTxt } from "./llms.js";
@@ -29,6 +30,8 @@ type Vars = {
   target: ValidatedUrl;
   /** Empty-body request: a discovery probe that only wants the payment requirements. */
   probe: boolean;
+  /** Set when this request is served from the free daily allowance (no payment). */
+  free: FreeGrant | undefined;
 };
 export type AppEnv = { Bindings: Bindings; Variables: Vars };
 
@@ -61,7 +64,7 @@ export function createApp(deps: AppDeps = {}) {
       origin: "*",
       allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
       allowHeaders: ["content-type", "payment-signature", "x-payment", "mcp-session-id", "mcp-protocol-version", "accept"],
-      exposeHeaders: ["payment-required", "payment-response", "x-payment-response", "mcp-session-id"],
+      exposeHeaders: ["payment-required", "payment-response", "x-payment-response", "mcp-session-id", "x-free-tier-limit", "x-free-tier-remaining"],
       maxAge: 600,
     }),
   );
@@ -177,10 +180,24 @@ export function createApp(deps: AppDeps = {}) {
   };
 
   /**
+   * Free daily allowance: an unpaid, valid request is served free while the client has
+   * allowance left. Probes and requests carrying a payment are never served free.
+   */
+  const freeAllowance: MiddlewareHandler<AppEnv> = async (c, next) => {
+    if (!c.get("probe") && !hasPaymentHeader(c.req.raw)) {
+      const tier = getFreeTier(c.get("cfg"), deps, c.env ?? {});
+      const grant = tier ? await tier.reserve(clientKey(c.req.raw)) : null;
+      if (grant) c.set("free", grant);
+    }
+    await next();
+  };
+
+  /**
    * @x402/hono payment gate, constructed per request (Workers cannot share in-flight I/O
    * across requests; the facilitator's /supported data is cached separately).
    */
   const paymentGate: MiddlewareHandler<AppEnv> = async (c, next) => {
+    if (c.get("free")) return next(); // served from the free allowance
     const cfg = c.get("cfg");
     const facilitator = getFacilitator(cfg, deps);
     const server = createResourceServer(cfg.payment!, facilitator);
@@ -220,18 +237,24 @@ export function createApp(deps: AppDeps = {}) {
     const target = c.get("target");
     try {
       const result = op === "extract_url" ? await extractUrl(input, c.get("svc"), target) : await extractUrlStructured(input, c.get("svc"), target);
-      logEvent("extract.success", { op, host: target.hostname, method: result.extraction.method, ms: result.extraction.durationMs, chars: result.extraction.characters });
+      const free = c.get("free");
+      logEvent("extract.success", { op, host: target.hostname, method: result.extraction.method, ms: result.extraction.durationMs, chars: result.extraction.characters, free: !!free });
+      if (free) {
+        c.header("x-free-tier-limit", String(free.limit));
+        c.header("x-free-tier-remaining", String(free.remaining));
+      }
       return c.json(result);
     } catch (err) {
       const e = toAppError(err);
+      await c.get("free")?.release(); // failed extractions do not use the allowance
       logEvent("extract.failure", { op, host: target.hostname, code: e.code });
       // Status >= 400 makes @x402/hono cancel settlement: failed extractions are not charged.
       return sendError(c, e);
     }
   };
 
-  app.post("/v1/extract", limitBody(), prevalidate, paymentGate, paidHandler("extract_url"));
-  app.post("/v1/extract/structured", limitBody(), prevalidate, paymentGate, paidHandler("extract_url_structured"));
+  app.post("/v1/extract", limitBody(), prevalidate, freeAllowance, paymentGate, paidHandler("extract_url"));
+  app.post("/v1/extract/structured", limitBody(), prevalidate, freeAllowance, paymentGate, paidHandler("extract_url_structured"));
 
   // ---- MCP (Streamable HTTP, stateless). Payment happens per tool call via @x402/mcp.
   // Stateless JSON mode has no server-initiated stream and no sessions, so GET/DELETE are
@@ -249,6 +272,7 @@ export function createApp(deps: AppDeps = {}) {
       inspectLimiter: c.env?.INSPECT_RATE_LIMITER,
       paidLimiter: c.env?.PAID_RATE_LIMITER,
       clientKey: clientKey(c.req.raw),
+      freeTier: getFreeTier(cfg, deps, c.env ?? {}),
     });
   });
 

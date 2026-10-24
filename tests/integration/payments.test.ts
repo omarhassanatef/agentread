@@ -318,3 +318,52 @@ describe("x402 on HTTP — Bazaar declaration ordering", () => {
     expect(checkIfBazaarNeeded(routes as never)).toBe(true);
   });
 });
+
+describe("free daily allowance", () => {
+  it("serves the first calls free (no payment), then asks for payment", async () => {
+    const { memoryFreeTier } = await import("../../src/payments/free-tier.js");
+    const tier = memoryFreeTier(3);
+    const h = harness(routes, {}, undefined, undefined, tier);
+    const remaining: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const res = await h.fetch("/v1/extract", postJson({ url: PAGE }));
+      expect(res.status).toBe(200);
+      expect(res.headers.get("payment-required")).toBeNull();
+      remaining.push(res.headers.get("x-free-tier-remaining")!);
+      expect(res.headers.get("x-free-tier-limit")).toBe("3");
+    }
+    expect(remaining).toEqual(["2", "1", "0"]);
+    const fourth = await h.fetch("/v1/extract/structured", postJson({ url: PAGE }));
+    expect(fourth.status).toBe(402);
+    expect(h.facilitator.calls.verify).toBe(0);
+    expect(h.facilitator.chain.settlements).toHaveLength(0);
+  });
+
+  it("failed extractions do not use the allowance", async () => {
+    const { memoryFreeTier } = await import("../../src/payments/free-tier.js");
+    const tier = memoryFreeTier(1);
+    const h = harness({ [PAGE]: { status: 404, body: "nope", headers: { "content-type": "text/html" } } }, {}, undefined, undefined, tier);
+    expect((await h.fetch("/v1/extract", postJson({ url: PAGE }))).status).toBe(502);
+    expect([...tier.used.values()].reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  it("requests carrying a payment are paid, not counted against the allowance", async () => {
+    const { memoryFreeTier } = await import("../../src/payments/free-tier.js");
+    const tier = memoryFreeTier(5);
+    const h = harness(routes, {}, undefined, undefined, tier);
+    const sig = await signFor(await h.fetch("/v1/extract", postJson({})));
+    const res = await h.fetch("/v1/extract", postJson({ url: PAGE }, { "payment-signature": sig }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-free-tier-remaining")).toBeNull();
+    expect(h.facilitator.chain.settlements).toHaveLength(1);
+    expect([...tier.used.values()].reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  it("discovery probes still get the 402 challenge", async () => {
+    const { memoryFreeTier } = await import("../../src/payments/free-tier.js");
+    const h = harness(routes, {}, undefined, undefined, memoryFreeTier(5));
+    const res = await h.fetch("/v1/extract", postJson({}));
+    expect(res.status).toBe(402);
+    expect(res.headers.get("payment-required")).toBeTruthy();
+  });
+});

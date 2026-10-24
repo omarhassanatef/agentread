@@ -108,7 +108,7 @@ function unpaidBody(cfg: PaymentConfig, op: PaidOperation) {
     body: {
       error: {
         code: "payment_required",
-        message: `This operation costs ${priceFor(cfg, op)} (USDC on ${SUPPORTED_NETWORKS[cfg.network].name}). Retry with an x402 PAYMENT-SIGNATURE header; requirements are in the PAYMENT-REQUIRED response header.`,
+        message: `This operation costs ${priceFor(cfg, op)} (USDC on ${SUPPORTED_NETWORKS[cfg.network].name}) once the free daily allowance is used. Retry with an x402 PAYMENT-SIGNATURE header; requirements are in the PAYMENT-REQUIRED response header.`,
         details: { operation: op, price: priceFor(cfg, op), network: cfg.network, x402Version: 2 },
       },
     },

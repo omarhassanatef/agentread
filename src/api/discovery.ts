@@ -24,6 +24,13 @@ export function discoveryDocument(cfg: AppConfig, origin: string) {
           chargedOnlyOnSuccess: true,
         }
       : { enabled: false },
+    freeTier: cfg.freeTier.perClient > 0
+      ? {
+          callsPerDay: cfg.freeTier.perClient,
+          scope: "per client (IP), UTC day, shared by extract_url and extract_url_structured; only successful extractions count",
+          headers: ["x-free-tier-limit", "x-free-tier-remaining"],
+        }
+      : null,
     operations: [
       { name: "inspect_url", http: { method: "POST", path: "/v1/inspect" }, mcpTool: "inspect_url", price: "free" },
       { name: "extract_url", http: { method: "POST", path: PAID_OPERATIONS.extract_url.path }, mcpTool: "extract_url", price: price("extract_url") },

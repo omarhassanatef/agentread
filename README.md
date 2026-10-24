@@ -10,7 +10,7 @@ AgentRead is a Cloudflare Worker that turns public web pages into clean, structu
 | Clean Markdown extraction | `POST /v1/extract` | `extract_url` | $0.003 |
 | Structured extraction | `POST /v1/extract/structured` | `extract_url_structured` | $0.005 |
 
-Prices are configuration, not code (see [Configuration](#configuration)).
+**Free allowance:** the first **5 successful extractions per day per client** are free; just call without payment. Only successful extractions count, and the `x-free-tier-remaining` response header (MCP: `_meta["agentread/free-tier"]`) shows what's left. A global cap of 1,000 free calls per day protects the service. Prices and allowances are configuration, not code (see [Configuration](#configuration)).
 
 ## Use it now
 
@@ -312,6 +312,7 @@ Non-secret configuration lives in `wrangler.jsonc` (`vars`, per environment). Se
 | `PRICE_EXTRACT_USD` | yes | `0.003` | Decimal USD, ≤ 6 decimals, 0 < price ≤ 1 |
 | `PRICE_EXTRACT_STRUCTURED_USD` | yes | `0.005` | |
 | `DNS_CHECK` | no | `doh` | `doh` = DNS-over-HTTPS pre-check of every hop; `off` disables it |
+| `FREE_CALLS_PER_DAY` / `FREE_CALLS_GLOBAL_PER_DAY` | no | `5` / `1000` | Free successful paid-operation calls per client (hashed IP) per UTC day, and the global daily cap. `0` disables. Needs the `FREE_QUOTA` Durable Object binding |
 | `EXTRACTION_ENGINE` | no | `lite` in `wrangler.jsonc` (code default `readability`) | `lite` = Workers AI `toMarkdown` (fits the Free plan); `readability` = linkedom + Readability (best quality, needs Workers Paid). Needs the `AI` binding; without it the service falls back to `readability` and logs `config.lite_engine_without_ai`. `GET /health` reports the active engine |
 | `DOH_URL` | no | `https://cloudflare-dns.com/dns-query` | |
 | `FETCH_TIMEOUT_MS` | no | `10000` | Overall deadline incl. redirects and body |

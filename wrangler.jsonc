@@ -11,6 +11,9 @@
   "observability": { "enabled": true, "head_sampling_rate": 1 },
   // Workers AI binding: used only for its free HTML→Markdown conversion (EXTRACTION_ENGINE=lite).
   "ai": { "binding": "AI" },
+  "durable_objects": { "bindings": [{ "name": "FREE_QUOTA", "class_name": "FreeQuota" }] },
+  // FreeQuota (free daily allowance counters). SQLite-backed, which the Workers Free plan supports.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FreeQuota"] }],
 
   // Top-level config = local development (`wrangler dev`). Always testnet.
   // X402_PAY_TO for local dev goes in .dev.vars (see .dev.vars.example).
@@ -34,6 +37,7 @@
       "name": "agentread",
       // Bindings are not inherited by environments; declare the AI binding per env.
       "ai": { "binding": "AI" },
+      "durable_objects": { "bindings": [{ "name": "FREE_QUOTA", "class_name": "FreeQuota" }] },
       "vars": {
         "ENVIRONMENT": "production",
         "X402_NETWORK": "eip155:8453",
